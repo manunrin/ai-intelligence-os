@@ -25,6 +25,8 @@ class KnowledgeItem(Base):
     embedding_model: Mapped[str | None] = mapped_column(String(128), nullable=True, comment="Model used for this embedding (e.g. text-embedding-3-large)")
     embedding_dimension: Mapped[int | None] = mapped_column(nullable=True, comment="Dimension of the stored vector")
     external_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    language_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    learning_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     source = relationship("Source", foreign_keys=[source_id])

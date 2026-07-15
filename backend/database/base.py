@@ -11,7 +11,7 @@ constraint_naming_convention = {
     "pk": "%(table_name)s_pkey",
 }
 
-metadata = MetaData(name="ai_intelligence_os", constraint_naming_convention=constraint_naming_convention)
+metadata = MetaData()
 
 
 class Base(DeclarativeBase):
