@@ -1,1 +1,1 @@
-"""Agent runtime package."""
+"""LangGraph workflow package."""
