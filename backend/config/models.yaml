@@ -1,0 +1,42 @@
+# LLM Routing Configuration
+#
+# Defines which provider and model to use for each task type.
+# The router resolves requests in this priority:
+#   1. Explicit model parameter (e.g. "openai/gpt-4o")
+#   2. Task-based routing rule
+#   3. Default provider/model
+
+defaults:
+  provider: openai
+  model: gpt-4o
+
+routing:
+  # Summarization — high-quality reasoning preferred
+  summary:
+    - [openai, gpt-4o]
+    - [anthropic, claude-sonnet-4-20250514]
+
+  # Translation — multilingual quality matters
+  translation:
+    - [compatible, qwen-max]
+    - [openai, gpt-4o]
+
+  # Research — broad knowledge base
+  research:
+    - [openai, gpt-4o]
+    - [anthropic, claude-sonnet-4-20250514]
+
+  # Analysis — structured reasoning
+  analysis:
+    - [anthropic, claude-sonnet-4-20250514]
+    - [openai, gpt-4o]
+
+  # Local/offline — privacy-sensitive tasks
+  local:
+    - [ollama, mistral]
+    - [compatible, qwen2.5]
+
+  # Embedding — cost-efficient
+  embedding:
+    - [openai, text-embedding-3-small]
+    - [compatible, bge-m3]

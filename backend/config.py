@@ -26,6 +26,19 @@ class Settings(BaseSettings):
     litellm_gateway_url: str = "http://localhost:4000"
     litellm_api_key: str = "sk-litellm-key"
 
+    # OpenAI
+    openai_api_key: str = ""
+
+    # Anthropic
+    anthropic_api_key: str = ""
+
+    # Ollama
+    ollama_base_url: str = "http://localhost:11434"
+
+    # Compatible (Qwen, DeepSeek, etc.)
+    compatible_api_base: str = ""
+    compatible_api_key: str = ""
+
     model_config = {"env_file": ".env", "env_prefix": ""}
 
 
