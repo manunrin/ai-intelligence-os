@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from uuid import UUID
 
 from ...connectors.base import RawArticle
 from ...database.models.article import Article
+from ...events.event import ArticleCreatedEvent
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +24,12 @@ class IngestionService:
     """Orchestrates article ingestion from connectors through deduplication to persistence.
 
     Pipeline:
-        Connector.run() → RawArticles → Deduplicate → Repository.save()
+        Connector.run() → RawArticles → Deduplicate → Repository.save() → Publish Event
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, event_publisher=None) -> None:
         self._session = session
+        self._publisher = event_publisher
 
     async def ingest(self, connector, batch_size: int = 50) -> dict[str, int]:
         """Run a connector's full ingestion pipeline.
@@ -44,18 +46,27 @@ class IngestionService:
 
         existing_urls = await self._get_existing_urls()
 
+        saved_ids: list[UUID] = []
+
         for article in articles[:batch_size]:
             url_hash = _url_hash(article.url)
             if url_hash in existing_urls:
                 stats["deduplicated"] += 1
                 continue
 
-            saved = await self._save_article(article)
-            if saved:
+            result = await self._save_article(article)
+            if result is not None:
                 stats["saved"] += 1
+                saved_ids.append(result)
                 existing_urls.add(url_hash)
 
         await self._session.commit()
+
+        # Publish events for all newly saved articles
+        for aid in saved_ids:
+            if self._publisher:
+                await self._publisher.publish(ArticleCreatedEvent(article_id=aid))
+
         logger.info(
             "Ingestion complete: %s fetched, %s deduplicated, %s saved",
             stats["fetched"], stats["deduplicated"], stats["saved"],
@@ -74,8 +85,12 @@ class IngestionService:
                 hashes.add(uh)
         return hashes
 
-    async def _save_article(self, article: RawArticle) -> bool:
-        """Save a RawArticle as an ORM Article entity."""
+    async def _save_article(self, article: RawArticle) -> UUID | None:
+        """Save a RawArticle as an ORM Article entity.
+
+        Returns:
+            The article UUID on success, or None on failure.
+        """
         try:
             url_hash = _url_hash(article.url)
             orm_article = Article(
@@ -88,7 +103,8 @@ class IngestionService:
                 metadata_={**article.metadata_, "url": article.url, "url_hash": url_hash},
             )
             self._session.add(orm_article)
-            return True
+            await self._session.flush()
+            return orm_article.id
         except Exception as exc:
             logger.error("Failed to save article '%s': %s", article.title, exc)
-            return False
+            return None

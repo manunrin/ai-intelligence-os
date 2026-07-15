@@ -1,0 +1,119 @@
+"""Knowledge persistence service — creates KnowledgeItem records."""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+from uuid import UUID
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from ..database.models.knowledge_item import KnowledgeItem
+
+logger = logging.getLogger(__name__)
+
+
+class KnowledgeService:
+    """Manages KnowledgeItem creation and retrieval.
+
+    Used by pipeline nodes and worker jobs to persist agent output
+    into the knowledge_items table.
+    """
+
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def create(
+        self,
+        title: str,
+        content: str,
+        kind: str,
+        *,
+        article_id: UUID | None = None,
+        source_id: UUID | None = None,
+        tags: list[str] | None = None,
+        embedding_model: str | None = None,
+        embedding_dimension: int | None = None,
+    ) -> KnowledgeItem:
+        """Persist a knowledge item to the database.
+
+        Args:
+            title: Knowledge entry title.
+            content: Full knowledge body.
+            kind: article | report | note | translation
+            article_id: Associated article (optional).
+            source_id: Originating source (optional).
+            tags: Classification tags.
+            embedding_model: Embedding model name (optional).
+            embedding_dimension: Vector dimension (optional).
+
+        Returns:
+            The persisted KnowledgeItem instance.
+        """
+        item = KnowledgeItem(
+            title=title,
+            content=content,
+            kind=kind,
+            article_id=article_id,
+            source_id=source_id,
+            tags=tags or [],
+            embedding_model=embedding_model,
+            embedding_dimension=embedding_dimension,
+        )
+        self._session.add(item)
+        await self._session.flush()
+        logger.info("Created KnowledgeItem %s (kind=%s)", item.id, kind)
+        return item
+
+    async def create_from_analysis(
+        self,
+        article_id: UUID,
+        analysis_result: dict[str, Any],
+        tags: list[str] | None = None,
+    ) -> KnowledgeItem:
+        """Create a KnowledgeItem from AnalystAgent output.
+
+        Args:
+            article_id: The article this analysis belongs to.
+            analysis_result: Output from AnalystAgent.execute().
+            tags: Optional classification tags.
+
+        Returns:
+            The persisted KnowledgeItem.
+        """
+        response = (analysis_result or {}).get("response", "")
+        score = (analysis_result or {}).get("importance_score")
+
+        return await self.create(
+            title=f"Analysis: {response[:80]}",
+            content=response,
+            kind="report",
+            article_id=article_id,
+            tags=tags or ["analysis"],
+        )
+
+    async def create_from_translation(
+        self,
+        article_id: UUID,
+        translation_result: dict[str, Any],
+        target_language: str,
+    ) -> KnowledgeItem:
+        """Create a KnowledgeItem from TranslatorAgent output.
+
+        Args:
+            article_id: The article this translation belongs to.
+            translation_result: Output from TranslatorAgent.execute().
+            target_language: Target language code.
+
+        Returns:
+            The persisted KnowledgeItem.
+        """
+        response = (translation_result or {}).get("response", "")
+
+        return await self.create(
+            title=f"Translation ({target_language})",
+            content=response,
+            kind="translation",
+            article_id=article_id,
+            tags=["translation", target_language],
+        )

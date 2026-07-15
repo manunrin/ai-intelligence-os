@@ -13,7 +13,7 @@ except ImportError:
     CronTrigger = None  # type: ignore
 
 from ...connectors.base import SourceConnector
-from .daily_news_job import daily_news_job
+from .jobs.daily_intelligence_job import daily_intelligence_job
 
 logger = logging.getLogger(__name__)
 
@@ -42,14 +42,14 @@ class JobScheduler:
 
     def add_daily_news_job(
         self,
-        connector: SourceConnector,
+        connectors: list[SourceConnector],
         cron_expression: str = "0 8 * * *",
-        job_id: str = "daily_news",
+        job_id: str = "daily_intelligence",
     ) -> None:
-        """Schedule a daily news ingestion job.
+        """Schedule a daily intelligence ingestion job.
 
         Args:
-            connector: The connector to run.
+            connectors: List of SourceConnector instances to process.
             cron_expression: Cron schedule (default: 8:00 AM daily).
             job_id: Unique identifier for this job.
         """
@@ -58,17 +58,23 @@ class JobScheduler:
 
         trigger = CronTrigger.from_crontab(cron_expression)
         self._scheduler.add_job(
-            daily_news_job,
+            daily_intelligence_job,
             trigger=trigger,
-            args=[connector],
+            args=[connectors],
             id=job_id,
             replace_existing=True,
         )
+        names = [c.name for c in connectors]
         self._jobs[job_id] = {
-            "connector_name": connector.name,
+            "connectors": names,
             "cron": cron_expression,
         }
-        logger.info("Added job '%s': %s (%s)", job_id, connector.name, cron_expression)
+        logger.info(
+            "Added job '%s': %s (%s)",
+            job_id,
+            ", ".join(names),
+            cron_expression,
+        )
 
     def list_jobs(self) -> dict[str, dict[str, Any]]:
         """Return registered job configurations."""
