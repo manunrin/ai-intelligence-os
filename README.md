@@ -2,6 +2,8 @@
 
 Enterprise AI Intelligence Operating System — connecting Information → Knowledge → Action.
 
+**Version:** 0.1.0
+
 ## Architecture
 
 ```
@@ -25,10 +27,53 @@ User → Frontend (Next.js) → Backend API (FastAPI) → Agent Runtime (LangGra
 ## Quick Start
 
 ```bash
-docker compose up -d
+make start          # Start all services
+make stop           # Stop all services
+make logs           # View live logs
+make test           # Run backend tests
 ```
 
-See [docs/development-plan.md](docs/development-plan.md) for the development roadmap.
+See [docker/README.md](docker/README.md) for full Docker instructions.
+
+## Environments
+
+| Environment | Config File | Purpose |
+|-------------|-------------|---------|
+| Development | `.env.development.example` | Local development with hot reload |
+| Test | `.env.test.example` | CI/testing with isolated data stores |
+| Production | `.env.production.example` | Production deployment |
+
+Copy the appropriate template to `.env` before starting:
+
+```bash
+cp .env.development.example .env   # or .env.test.example / .env.production.example
+make start
+```
+
+Key differences:
+
+- **Development**: debug enabled, local ports exposed, pool_min=1
+- **Test**: isolated database names and Redis indices, mock LLM keys
+- **Production**: debug disabled, strong passwords required, connection pooling increased
+
+## Makefile Commands
+
+| Command | Description |
+|---------|-------------|
+| `make start` | Build and start all services (development) |
+| `make stop` | Stop all services, preserve data |
+| `make rebuild` | Rebuild containers without cache |
+| `make clean` | Remove containers, networks, and volumes |
+| `make logs` | Follow all service logs |
+| `make logs-svc svc=<name>` | Follow a single service log |
+| `make test` | Run backend test suite |
+| `make test-unit` | Run unit tests only |
+| `make test-integration` | Run integration tests only |
+| `make init-db` | Run Alembic migrations |
+| `make shell` | Open interactive backend shell |
+| `make db-shell` | Open PostgreSQL psql session |
+| `make redis-cli` | Open Redis CLI session |
+| `make help` | Show all available commands |
 
 ## Structure
 
