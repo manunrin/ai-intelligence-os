@@ -1,0 +1,85 @@
+"""RAG generator — synthesizes answers from retrieved knowledge + LLM."""
+
+from __future__ import annotations
+
+import logging
+from typing import Any
+
+from ..llm.base import ChatMessage, ChatRole, LLMProvider
+
+logger = logging.getLogger(__name__)
+
+
+class RagGenerator:
+    """Generates answers by combining retrieved context with LLM inference.
+
+    Usage:
+        generator = RagGenerator(provider)
+        answer = await generator.generate(
+            query="What are the latest AI developments?",
+            context=[retrieval_result1, retrieval_result2],
+        )
+    """
+
+    def __init__(self, provider: LLMProvider, model: str = "gpt-4o") -> None:
+        self._provider = provider
+        self._model = model
+
+    async def generate(
+        self,
+        query: str,
+        context: list[Any],
+        *,
+        system_prompt: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, str]:
+        """Generate an answer from retrieved context.
+
+        Args:
+            query: User's original question.
+            context: List of RetrievalResult from RagRetriever.
+            system_prompt: Optional custom system message.
+            **kwargs: Passed to the provider (temperature, max_tokens, etc.).
+
+        Returns:
+            Dict with keys: answer, sources, query
+        """
+        if system_prompt is None:
+            system_prompt = (
+                "You are a helpful analyst. Answer the user's question based only "
+                "on the provided context. If the context does not contain enough "
+                "information, say so clearly."
+            )
+
+        messages = [
+            ChatMessage(role=ChatRole.SYSTEM, content=system_prompt),
+            ChatMessage(role=ChatRole.USER, content=self._build_user_message(query, context)),
+        ]
+
+        response = await self._provider.chat(messages, model=self._model, **kwargs)
+
+        sources = [
+            {"knowledge_id": ctx.knowledge_id, "title": ctx.title}
+            for ctx in context
+        ]
+
+        return {
+            "answer": response.content or "",
+            "sources": sources,
+            "query": query,
+        }
+
+    @staticmethod
+    def _build_user_message(query: str, context: list[Any]) -> str:
+        """Format context chunks into a single user message."""
+        parts: list[str] = []
+        for i, chunk in enumerate(context, 1):
+            title = getattr(chunk, "title", "Unknown")
+            content = getattr(chunk, "content", "")
+            kind = getattr(chunk, "kind", "unknown")
+            parts.append(f"[{i}] ({kind}) {title}:\n{content}")
+
+        context_text = "\n\n".join(parts)
+        return (
+            f"Context:\n{context_text}\n\nQuestion: {query}"
+        )

@@ -106,7 +106,7 @@ services:
       - ai-intelligence-net
 
   qdrant:
-    image: qdrant/qdrant:1.11-alpine
+    image: qdrant/qdrant:v1.11.5
     container_name: aio-qdrant
     restart: unless-stopped
     environment:

@@ -1,4 +1,4 @@
-"""Knowledge persistence service — creates KnowledgeItem records."""
+"""Knowledge persistence service — creates KnowledgeItem records with embeddings."""
 
 from __future__ import annotations
 
@@ -9,6 +9,8 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database.models.knowledge_item import KnowledgeItem
+from ..embedding.base import EmbeddingResult
+from ..vector.qdrant import QdrantPoint, QdrantVectorService
 
 logger = logging.getLogger(__name__)
 
@@ -17,11 +19,17 @@ class KnowledgeService:
     """Manages KnowledgeItem creation and retrieval.
 
     Used by pipeline nodes and worker jobs to persist agent output
-    into the knowledge_items table.
+    into the knowledge_items table. Optionally generates embeddings
+    and upserts to the vector store.
     """
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        vector_service: QdrantVectorService | None = None,
+    ) -> None:
         self._session = session
+        self._vector = vector_service
 
     async def create(
         self,
@@ -34,6 +42,9 @@ class KnowledgeService:
         tags: list[str] | None = None,
         embedding_model: str | None = None,
         embedding_dimension: int | None = None,
+        # Embedding generation
+        embed: bool = False,
+        embedding_client=None,  # EmbeddingClient (lazy import)
     ) -> KnowledgeItem:
         """Persist a knowledge item to the database.
 
@@ -46,6 +57,8 @@ class KnowledgeService:
             tags: Classification tags.
             embedding_model: Embedding model name (optional).
             embedding_dimension: Vector dimension (optional).
+            embed: If True, generate embedding and upsert to vector store.
+            embedding_client: EmbeddingClient instance (required if embed=True).
 
         Returns:
             The persisted KnowledgeItem instance.
@@ -62,7 +75,30 @@ class KnowledgeService:
         )
         self._session.add(item)
         await self._session.flush()
-        logger.info("Created KnowledgeItem %s (kind=%s)", item.id, kind)
+
+        # Generate embedding and upsert to vector store
+        if embed and embedding_client is not None:
+            try:
+                result = await embedding_client.embed(content)
+                item.embedding_model = result.model
+                item.embedding_dimension = len(result.embedding)
+                if self._vector and result.embedding:
+                    await self._vector.upsert([
+                        QdrantPoint(
+                            id=item.id,
+                            vector=result.embedding,
+                            payload={
+                                "title": title,
+                                "kind": kind,
+                                "article_id": str(article_id) if article_id else None,
+                                "tags": tags or [],
+                            },
+                        )
+                    ])
+                logger.info("Embedded and upserted KnowledgeItem %s", item.id)
+            except Exception as exc:
+                logger.warning("Embedding failed for '%s': %s", title, exc)
+
         return item
 
     async def create_from_analysis(
