@@ -1,10 +1,25 @@
-"""Database models."""
+"""Re-export models from the models package."""
 
-# Models will be defined here as domain entities are specified.
-# Example:
-# from sqlalchemy import Column, Integer, String
-# from .base import Base
-#
-# class Article(Base):
-#     __tablename__ = "articles"
-#     id = Column(Integer, primary_key=True)
+from .models import (
+    Source,
+    Article,
+    IntelligenceReport,
+    KnowledgeItem,
+    Task,
+    Agent,
+    AgentRun,
+    Workflow,
+    UserPreference,
+)
+
+__all__ = [
+    "Source",
+    "Article",
+    "IntelligenceReport",
+    "KnowledgeItem",
+    "Task",
+    "Agent",
+    "AgentRun",
+    "Workflow",
+    "UserPreference",
+]
