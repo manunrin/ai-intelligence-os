@@ -22,6 +22,8 @@ class KnowledgeItem(Base):
     report_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     tags: Mapped[list[str]] = mapped_column(ARRAY(String(128)), default=list)
     embedding: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    embedding_model: Mapped[str | None] = mapped_column(String(128), nullable=True, comment="Model used for this embedding (e.g. text-embedding-3-large)")
+    embedding_dimension: Mapped[int | None] = mapped_column(nullable=True, comment="Dimension of the stored vector")
     external_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 

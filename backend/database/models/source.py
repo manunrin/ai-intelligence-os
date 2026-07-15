@@ -17,6 +17,7 @@ class Source(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     url: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
     kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    source_type: Mapped[str | None] = mapped_column(String(16), nullable=True, comment="official | community | paper | news | social")
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)

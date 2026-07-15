@@ -41,6 +41,7 @@ Information ingestion origins (RSS feeds, blog URLs, GitHub repos, etc.)
 | name | VARCHAR(255) | NOT NULL | Human-readable source name |
 | url | TEXT | NOT NULL, UNIQUE | Source endpoint or feed URL |
 | kind | VARCHAR(32) | NOT NULL | rss \| blog \| github \| api \| web |
+| source_type | VARCHAR(16) | | official \| community \| paper \| news \| social |
 | enabled | BOOLEAN | DEFAULT true | Whether this source is active |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
 | updated_at | TIMESTAMPTZ | DEFAULT NOW() | Last modification timestamp |
@@ -107,6 +108,8 @@ Persisted knowledge entries with vector embeddings for semantic search.
 | report_id | UUID | FK→intelligence_reports.id | Associated report (nullable) |
 | tags | VARCHAR(128)[] | DEFAULT '{}' | Classification tags |
 | embedding | VECTOR(1536) | | Qdrant vector reference |
+| embedding_model | VARCHAR(128) | | Model used for this embedding (e.g. text-embedding-3-large) |
+| embedding_dimension | INT | | Dimension of the stored vector |
 | external_url | TEXT | | Link to Notion page or external resource |
 | created_at | TIMESTAMPTZ | DEFAULT NOW() | Creation timestamp |
 
