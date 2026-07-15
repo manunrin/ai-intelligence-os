@@ -1,0 +1,15 @@
+-- AI Intelligence OS — Initial schema seed
+-- Tables are placeholders; full schema follows architecture plan.
+
+-- CREATE TABLE users (
+--     id SERIAL PRIMARY KEY,
+--     email VARCHAR(255) UNIQUE NOT NULL,
+--     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- );
+--
+-- CREATE TABLE articles (
+--     id SERIAL PRIMARY KEY,
+--     title VARCHAR(500) NOT NULL,
+--     source VARCHAR(255),
+--     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+-- );
