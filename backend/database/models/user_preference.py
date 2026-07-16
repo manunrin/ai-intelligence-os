@@ -7,7 +7,7 @@ from sqlalchemy import DateTime, String
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from ...database.base import Base
+from ...database.base import Base, _utcnow
 
 
 class UserPreference(Base):
