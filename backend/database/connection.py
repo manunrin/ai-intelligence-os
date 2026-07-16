@@ -15,8 +15,8 @@ def create_engine_for_settings(settings: Settings):
     global _engine, _session_factory
     _engine = create_async_engine(
         settings.database_url,
-        pool_size=settings.database_pool_max,
-        max_overflow=settings.database_pool_min,
+        pool_size=settings.database_pool_min,
+        max_overflow=settings.database_pool_max - settings.database_pool_min,
         pool_pre_ping=True,
         echo=settings.app_debug,
     )

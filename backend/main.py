@@ -8,7 +8,7 @@ from fastapi import FastAPI
 
 from .app.bootstrap import ApplicationBootstrap
 from .routers.api import api_router, register_exception_handlers, setup_middleware
-from .database.connection import get_engine
+from .database.connection import create_engine_for_settings, get_session_factory
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,12 @@ async def lifespan(app: FastAPI):
     """Application lifecycle management."""
     global _bootstrap
 
+    from .config import get_settings
+
     logger.info("Starting AI Intelligence OS backend...")
+
+    # Initialize engine explicitly at startup (not lazily)
+    engine = create_engine_for_settings(get_settings())
 
     # Initialize MCP servers, tool registry, and agents
     _bootstrap = ApplicationBootstrap()
@@ -29,7 +34,6 @@ async def lifespan(app: FastAPI):
     app.state.mcp_registry = _bootstrap.mcp_registry
     app.state.tool_registry = _bootstrap.tool_registry
 
-    engine = get_engine()
     logger.info("Backend startup complete — MCP servers: %s", list(_bootstrap.mcp_registry.list_servers().keys()))
 
     yield
