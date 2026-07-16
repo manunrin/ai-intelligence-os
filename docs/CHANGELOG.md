@@ -5,34 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to Semantic Versioning.
 
-## [Unreleased] — Phase 6-C
+## [Unreleased] — Phase 6-D.1: Backend Write Operations
 
 ### Date
 2026-07-16
 
 ### Commit
-`b0902b6` — Phase 6-C: Dashboard Integration & End-to-End API
+`auto`
 
 ### Added
-- CORS middleware on backend (`backend/main.py`) to allow frontend dev server calls
-- `unwrap()` helper in frontend API client to extract `data` from APIResponse envelope
-- Improved error handling in frontend API client: parses JSON error body when present
+- **Article write operations**: POST `/api/v1/articles`, GET `/api/v1/articles/{id}`, PUT `/api/v1/articles/{id}`, DELETE `/api/v1/articles/{id}`
+- **Task write operations**: POST `/api/v1/tasks`, GET `/api/v1/tasks/{id}`, PUT `/api/v1/tasks/{id}`, DELETE `/api/v1/tasks/{id}`
+- **Knowledge item write operations**: POST `/api/v1/knowledge`, GET `/api/v1/knowledge/{id}`, PUT `/api/v1/knowledge/{id}`, DELETE `/api/v1/knowledge/{id}`
+- **Report write operations**: POST `/api/v1/reports`, GET `/api/v1/reports/{id}`
+- **Agent run trigger**: POST `/api/v1/agents/{agent_id}/run` to start agent workflow execution
+- **Pydantic v2 input schemas**: `ArticleCreate/Update`, `TaskCreate/Update`, `KnowledgeItemCreate/Update`, `ReportCreate/Update` with field validation, min/max length constraints
+- **Service write methods**: `create_*`, `update_*`, `delete_*`, `get_*` on all business services
+- **Repository base methods**: `create()`, `update()`, `delete()`, `get_by_id()` available via `BaseRepository`
+- **Unit tests**: Repository layer (12 tests), Service layer (38 tests), Router layer (35 tests) = 85 new tests
+- `tests/conftest.py`: pytest-asyncio fixture for async test support
 
 ### Changed
-- Frontend dashboard now calls correct backend paths (`/api/v1/*` instead of `/api/*`)
-- Frontend `DataTable` component: simplified generic typing (`unknown[]` instead of undeclared `T`)
-- Frontend types: converted `interface` + intersection to `type` aliases (fixes TS compilation)
-- Badge variant type maps now include `"muted"` in their union type
+- `ArticleService`: added get, create, update, delete methods
+- `TaskService`: added get, create, update, delete methods
+- `KnowledgeService`: added get, create, update, delete methods
+- `ReportService`: added get, create, update methods
+- `AgentService`: added `run_agent()` method to trigger agent workflows
+- All routers extended with write endpoints following Router → Service → Repository pattern
+- Fixed deprecated `max_items` in knowledge schema (replaced with Pydantic v2 default behavior)
 
-### Fixed
-- **Critical**: Dashboard was calling wrong API paths (`/api/articles` vs `/api/v1/articles`)
-- **Critical**: Dashboard assigned full APIResponse envelope to state instead of extracted `data` array
-- **Critical**: No CORS configuration prevented browser-to-backend communication
-- **Medium**: Table component referenced undeclared generic `T`
-- **Medium**: TypeScript build failed due to `interface {} & Record<string, unknown>` syntax
-- **Low**: Badge variant type casts were overly complex with redundant union assertions
-
-### Breaking Changes
-None. All changes are internal integration fixes.
+### Test Results
+- **203 total unit tests** (108 existing + 95 new)
+- All existing tests continue passing
+- New coverage: repository CRUD, service business logic, router HTTP endpoints, validation errors, 404 handling
 
 ---

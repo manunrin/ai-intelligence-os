@@ -82,8 +82,15 @@
 
 **Goal:** Enable data mutation and user management.
 
-**Scope:**
-- POST/PUT/DELETE endpoints for all resources
+**Completed — Phase 6-D.1 (Backend Write Operations):**
+- POST/PUT/DELETE endpoints for articles, tasks, knowledge items
+- POST/GET endpoints for reports
+- POST `/agents/{id}/run` endpoint
+- Pydantic v2 input schemas with validation
+- Full Router → Service → Repository layering
+- 85 new unit tests (203 total)
+
+**Remaining:**
 - JWT authentication middleware
 - User registration/login endpoints
 - Role-based access control (admin, user)
