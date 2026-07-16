@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
+import { api, unwrap } from "@/lib/api";
 import type { Article, AgentRun, Task, KnowledgeItem, IntelligenceReport } from "@/types";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -33,19 +33,18 @@ export default function Home() {
   useEffect(() => {
     async function load() {
       try {
-        const [articlesRes, knowledgeRes, tasksRes, agentsRes, reportsRes] =
-          await Promise.all([
-            api.get<Article[]>("/api/articles"),
-            api.get<KnowledgeItem[]>("/api/knowledge"),
-            api.get<Task[]>("/api/tasks"),
-            api.get<AgentRun[]>("/api/agents/runs"),
-            api.get<IntelligenceReport[]>("/api/reports"),
-          ]);
-        setArticles(articlesRes);
-        setKnowledgeItems(knowledgeRes);
-        setTasks(tasksRes);
-        setAgentRuns(agentsRes);
-        setReports(reportsRes);
+        const [articles, knowledge, tasks, agents, reports] = await Promise.all([
+          unwrap<Article>(api.get<unknown>("/api/v1/articles")),
+          unwrap<KnowledgeItem>(api.get<unknown>("/api/v1/knowledge")),
+          unwrap<Task>(api.get<unknown>("/api/v1/tasks")),
+          unwrap<AgentRun>(api.get<unknown>("/api/v1/agents/runs")),
+          unwrap<IntelligenceReport>(api.get<unknown>("/api/v1/reports")),
+        ]);
+        setArticles(articles);
+        setKnowledgeItems(knowledge);
+        setTasks(tasks);
+        setAgentRuns(agents);
+        setReports(reports);
       } catch (err) {
         // Backend not running yet — show empty state
         if (err instanceof Error && err.message.includes("fetch")) {
@@ -166,7 +165,7 @@ export default function Home() {
                   error: "danger",
                 };
                 return (
-                  <Badge variant={(statusColors[value as string] || "default") as "default" | "success" | "warning" | "danger" | "muted"}>
+                  <Badge variant={statusColors[value as string] || "default"}>
                     {String(value)}
                   </Badge>
                 );
@@ -218,7 +217,7 @@ export default function Home() {
             rowKey="id"
             renderCell={(key: string, value: unknown) => {
               if (key === "priority" || key === "status") {
-                const colors: Record<string, "default" | "success" | "warning" | "danger"> = {
+                const colors: Record<string, "default" | "success" | "warning" | "danger" | "muted"> = {
                   low: "muted",
                   medium: "default",
                   high: "warning",
@@ -229,7 +228,7 @@ export default function Home() {
                   blocked: "danger",
                 };
                 return (
-                  <Badge variant={(colors[value as string] || "default") as "default" | "success" | "warning" | "danger" | "muted"}>
+                  <Badge variant={colors[value as string] || "default"}>
                     {String(value)}
                   </Badge>
                 );
@@ -249,14 +248,14 @@ export default function Home() {
             rowKey="id"
             renderCell={(key: string, value: unknown) => {
               if (key === "status") {
-                const colors: Record<string, "default" | "success" | "warning" | "danger"> = {
+                const colors: Record<string, "default" | "success" | "warning" | "danger" | "muted"> = {
                   pending: "muted",
                   running: "default",
                   completed: "success",
                   failed: "danger",
                 };
                 return (
-                  <Badge variant={(colors[value as string] || "default") as "default" | "success" | "warning" | "danger" | "muted"}>
+                  <Badge variant={colors[value as string] || "default"}>
                     {String(value)}
                   </Badge>
                 );

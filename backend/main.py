@@ -3,6 +3,7 @@
 from contextlib import asynccontextmanager
 
 import logging
+import os
 
 from fastapi import FastAPI
 
@@ -59,6 +60,17 @@ def create_app() -> FastAPI:
     # Register centralized exception handlers and middleware
     register_exception_handlers(app)
     setup_middleware(app)
+
+    # Allow frontend dev server to call backend APIs
+    from starlette.middleware.cors import CORSMiddleware
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[os.getenv("NEXT_PUBLIC_API_URL", "http://localhost:3000")],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # Register the single aggregated API router
     app.include_router(api_router, prefix="/api/v1")

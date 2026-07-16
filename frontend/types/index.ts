@@ -1,4 +1,4 @@
-export interface Article {
+export type Article = {
   id: string;
   title: string;
   summary: string;
@@ -12,7 +12,7 @@ export interface Article {
   published_at?: string;
 } & Record<string, unknown>;
 
-export interface KnowledgeItem {
+export type KnowledgeItem = {
   id: string;
   title: string;
   content: string;
@@ -22,7 +22,7 @@ export interface KnowledgeItem {
   created_at: string;
 } & Record<string, unknown>;
 
-export interface AgentRun {
+export type AgentRun = {
   id: string;
   agent_id: string;
   workflow_id: string | null;
@@ -34,7 +34,7 @@ export interface AgentRun {
   finished_at: string | null;
 } & Record<string, unknown>;
 
-export interface Task {
+export type Task = {
   id: string;
   title: string;
   description: string;
@@ -50,7 +50,7 @@ export interface AgentInfo {
   description: string;
 }
 
-export interface IntelligenceReport {
+export type IntelligenceReport = {
   id: string;
   topic: string;
   research_result: Record<string, unknown> | null;
@@ -59,4 +59,4 @@ export interface IntelligenceReport {
   knowledge_items: KnowledgeItem[];
   tasks: Task[];
   created_at: string;
-}
+};
