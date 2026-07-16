@@ -12,12 +12,6 @@ from fastapi.testclient import TestClient
 from backend.main import create_app
 
 
-@pytest.fixture()
-def client():
-    app = create_app()
-    return TestClient(app)
-
-
 class FakeSessionCtx:
     async def __aenter__(self):
         return MagicMock()
@@ -63,8 +57,42 @@ class TrackingService:
         return True
 
 
+class NotFoundService(TrackingService):
+    async def get_article(self, aid):
+        return None
+
+    async def update_article(self, aid, data):
+        return None
+
+    async def delete_article(self, aid):
+        return False
+
+
+def _make_client():
+    from unittest.mock import MagicMock
+    import uuid as _uuid
+
+    fake_user = MagicMock()
+    fake_user.id = _uuid.uuid4()
+    fake_user.username = "testuser"
+    fake_user.role = "user"
+    fake_user.is_active = True
+
+    from backend.main import create_app
+    from backend.routers.deps import get_current_user
+
+    app = create_app()
+
+    async def mock_get_current_user():
+        return fake_user
+
+    app.dependency_overrides[get_current_user] = mock_get_current_user
+    return TestClient(app), app
+
+
 class TestArticleCreate:
-    def test_post_create_article(self, client):
+    def test_post_create_article(self):
+        client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
             with patch("backend.routers.articles.ArticleService", TrackingService):
                 resp = client.post("/api/v1/articles", json={
@@ -74,70 +102,75 @@ class TestArticleCreate:
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["title"] == "Created"
+        app.dependency_overrides.clear()
 
-    def test_post_validation_error_missing_title(self, client):
+    def test_post_validation_error_missing_title(self):
+        client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
             resp = client.post("/api/v1/articles", json={"source_id": str(uuid.uuid4())})
         assert resp.status_code == 422
+        app.dependency_overrides.clear()
 
-    def test_post_validation_error_empty_title(self, client):
+    def test_post_validation_error_empty_title(self):
+        client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
             resp = client.post("/api/v1/articles", json={"title": "", "source_id": str(uuid.uuid4())})
         assert resp.status_code == 422
+        app.dependency_overrides.clear()
 
 
 class TestArticleGetById:
-    def test_get_found(self, client):
+    def test_get_found(self):
+        client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
             with patch("backend.routers.articles.ArticleService", TrackingService):
                 resp = client.get(f"/api/v1/articles/{uuid.uuid4()}")
         assert resp.status_code == 200
         assert resp.json()["data"]["title"] == "Found"
+        app.dependency_overrides.clear()
 
-    def test_get_not_found_returns_404(self, client):
-        class NotFoundService(TrackingService):
-            async def get_article(self, aid):
-                return None
-
+    def test_get_not_found_returns_404(self):
+        client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
             with patch("backend.routers.articles.ArticleService", NotFoundService):
                 resp = client.get(f"/api/v1/articles/{uuid.uuid4()}")
         assert resp.status_code == 404
+        app.dependency_overrides.clear()
 
 
 class TestArticleUpdate:
-    def test_put_update(self, client):
+    def test_put_update(self):
+        client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
             with patch("backend.routers.articles.ArticleService", TrackingService):
                 resp = client.put(f"/api/v1/articles/{uuid.uuid4()}", json={"title": "Updated"})
         assert resp.status_code == 200
         assert resp.json()["data"]["title"] == "Updated"
+        app.dependency_overrides.clear()
 
-    def test_put_not_found_returns_404(self, client):
-        class NotFoundService(TrackingService):
-            async def update_article(self, aid, data):
-                return None
-
+    def test_put_not_found_returns_404(self):
+        client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
             with patch("backend.routers.articles.ArticleService", NotFoundService):
                 resp = client.put(f"/api/v1/articles/{uuid.uuid4()}", json={"title": "X"})
         assert resp.status_code == 404
+        app.dependency_overrides.clear()
 
 
 class TestArticleDelete:
-    def test_delete_success(self, client):
+    def test_delete_success(self):
+        client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
             with patch("backend.routers.articles.ArticleService", TrackingService):
                 resp = client.delete(f"/api/v1/articles/{uuid.uuid4()}")
         assert resp.status_code == 200
         assert resp.json()["success"] is True
+        app.dependency_overrides.clear()
 
-    def test_delete_not_found_returns_404(self, client):
-        class NotFoundService(TrackingService):
-            async def delete_article(self, aid):
-                return False
-
+    def test_delete_not_found_returns_404(self):
+        client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
             with patch("backend.routers.articles.ArticleService", NotFoundService):
                 resp = client.delete(f"/api/v1/articles/{uuid.uuid4()}")
         assert resp.status_code == 404
+        app.dependency_overrides.clear()

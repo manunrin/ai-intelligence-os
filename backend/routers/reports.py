@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..schemas.report import IntelligenceReportResponse
 from ..schemas.report_create import ReportCreate
 from ..schemas.response import APIResponse
-from .deps import get_db
+from .deps import get_current_user, get_db
 from .pagination import PaginationParams, get_pagination
 from ..services.report_service import ReportService
 
@@ -58,6 +58,7 @@ async def get_report(report_id: str, db=Depends(get_db)):
 )
 async def create_report(
     data: ReportCreate,
+    current_user: Any = Depends(get_current_user),
     db=Depends(get_db),
 ):
     service = ReportService(db)

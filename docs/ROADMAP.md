@@ -90,12 +90,20 @@
 - Full Router → Service → Repository layering
 - 85 new unit tests (203 total)
 
+**Completed — Phase 6-D.2 (Authentication & Authorization):**
+- User model with bcrypt password hashing
+- JWT access token generation and verification (HS256)
+- User registration and login endpoints
+- `get_current_user` FastAPI dependency for all write endpoints
+- Role check foundation (`require_role` dependency factory)
+- Alembic migration for users table
+- All write endpoints protected behind authentication
+
 **Remaining:**
-- JWT authentication middleware
-- User registration/login endpoints
-- Role-based access control (admin, user)
-- Frontend write UI (forms, confirmation dialogs)
-- Per-tab loading states and error boundaries
+- Refresh token endpoint (deferred to later phase)
+- Full RBAC middleware (admin/user roles defined but not enforced beyond basic check)
+- Frontend auth UI (login form, token storage, auto-attach headers)
+- Password reset flow
 
 **Dependencies:** Phase 6-C
 **Expected Output:** Full CRUD API with authenticated frontend

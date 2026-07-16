@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..schemas.article import ArticleResponse
 from ..schemas.article_create import ArticleCreate, ArticleUpdate
 from ..schemas.response import APIResponse
-from .deps import get_db
+from .deps import get_current_user, get_db
 from .pagination import PaginationParams, get_pagination
 from ..services.article_service import ArticleService
 
@@ -58,6 +58,7 @@ async def get_article(article_id: str, db=Depends(get_db)):
 )
 async def create_article(
     data: ArticleCreate,
+    current_user: Any = Depends(get_current_user),
     db=Depends(get_db),
 ):
     service = ArticleService(db)
@@ -75,6 +76,7 @@ async def create_article(
 async def update_article(
     article_id: str,
     data: ArticleUpdate,
+    current_user: Any = Depends(get_current_user),
     db=Depends(get_db),
 ):
     service = ArticleService(db)
@@ -91,7 +93,7 @@ async def update_article(
     operation_id="deleteArticle",
     response_model=APIResponse[None],
 )
-async def delete_article(article_id: str, db=Depends(get_db)):
+async def delete_article(article_id: str, current_user: Any = Depends(get_current_user), db=Depends(get_db)):
     service = ArticleService(db)
     deleted = await service.delete_article(article_id)
     if not deleted:

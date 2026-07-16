@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends
 
 from ..schemas.agent_run import AgentRunResponse
 from ..schemas.response import APIResponse
-from .deps import get_db
+from .deps import get_current_user, get_db
 from .pagination import PaginationParams, get_pagination
 from ..services.agent_service import AgentService
 
@@ -45,6 +45,7 @@ async def list_agent_runs(
 async def run_agent(
     agent_id: str,
     body: dict[str, Any] | None = None,
+    current_user: Any = Depends(get_current_user),
     db=Depends(get_db),
 ):
     """Trigger agent execution.

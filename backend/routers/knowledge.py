@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..schemas.knowledge import KnowledgeItemResponse
 from ..schemas.knowledge_create import KnowledgeItemCreate, KnowledgeItemUpdate
 from ..schemas.response import APIResponse
-from .deps import get_db
+from .deps import get_current_user, get_db
 from .pagination import PaginationParams, get_pagination
 from ..services.knowledge_service import KnowledgeService
 
@@ -60,6 +60,7 @@ async def get_knowledge_item(item_id: str, db=Depends(get_db)):
 )
 async def create_knowledge_item(
     data: KnowledgeItemCreate,
+    current_user: Any = Depends(get_current_user),
     db=Depends(get_db),
 ):
     service = KnowledgeService(db)
@@ -77,6 +78,7 @@ async def create_knowledge_item(
 async def update_knowledge_item(
     item_id: str,
     data: KnowledgeItemUpdate,
+    current_user: Any = Depends(get_current_user),
     db=Depends(get_db),
 ):
     service = KnowledgeService(db)
@@ -93,7 +95,7 @@ async def update_knowledge_item(
     operation_id="deleteKnowledgeItem",
     response_model=APIResponse[None],
 )
-async def delete_knowledge_item(item_id: str, db=Depends(get_db)):
+async def delete_knowledge_item(item_id: str, current_user: Any = Depends(get_current_user), db=Depends(get_db)):
     service = KnowledgeService(db)
     deleted = await service.delete_knowledge_item(item_id)
     if not deleted:

@@ -55,6 +55,7 @@ User → Frontend (Next.js) → Backend API (FastAPI) → Agent Runtime (LangGra
 | 6-B | Service Wiring | Business services wired to repositories, real data fetching | `a02ba99` |
 | 6-C | Dashboard Integration | Frontend dashboard calls real APIs, CORS, unwrap helper, error handling | `b0902b6` |
 | 6-D.1 | Backend Write Operations | POST/PUT/DELETE for articles, tasks, knowledge; POST/GET for reports; agent run trigger; 85 new tests (203 total) | `auto` |
+| 6-D.2 | Authentication & Authorization | User model, bcrypt passwords, JWT access tokens (HS256), register/login/me endpoints, get_current_user dependency, all write endpoints protected | `auto` |
 
 ## Git History (30 commits)
 
@@ -179,9 +180,10 @@ b3d14cc Phase 1: Project foundation scaffold
 
 | Category | Files | Coverage |
 |----------|-------|----------|
-| Unit - Routers | 9 | Pagination, schemas, health, OpenAPI metadata, write operations (POST/PUT/DELETE/validation/404) |
-| Unit - Services | 5 | Article, Task, Knowledge, Report, Agent service business logic |
-| Unit - Repositories | 3 | Article, Task, Knowledge repository CRUD |
+| Unit - Routers | 14 | Pagination, schemas, health, OpenAPI metadata, write operations, auth (register/login/me), protected endpoints |
+| Unit - Services | 6 | Article, Task, Knowledge, Report, Agent, User service business logic |
+| Unit - Repositories | 4 | Article, Task, Knowledge, User repository CRUD |
+| Unit - Utils | 2 | Password hashing, JWT encode/decode |
 | Unit - Agents | 7 | Registry, all 7 agents with mock LLM |
 | Integration - Workflow | 1 | Autonomous graph build, full pipeline, MCP integration |
 | Integration - MCP | 4 | Real API tests (skipped without credentials) |
@@ -190,13 +192,16 @@ b3d14cc Phase 1: Project foundation scaffold
 
 ## Known Issues
 
-1. **No authentication** — Write endpoints exist but are unprotected. JWT middleware needed.
-2. **Pagination UI missing** — Backend supports offset/limit but frontend has no pagination controls.
-3. **Report PUT/DELETE not implemented** — Out of scope for Phase 6-D.1.
-4. **Agent run creates record only** — Workflow execution is triggered but not yet wired to LangGraph runner.
-5. **No per-tab loading states** — Dashboard shows all-or-nothing loading.
-6. **No error boundaries** — Individual sections don't recover from errors independently.
-7. **LiteLLM Gateway not deployed** — Configured in docker-compose.yml but litellm service not included.
+1. **No refresh tokens** — Only access tokens implemented. Refresh token endpoint deferred to later phase.
+2. **No frontend auth UI** — Login forms, token storage, and auto-attach headers not yet implemented.
+3. **Pagination UI missing** — Backend supports offset/limit but frontend has no pagination controls.
+4. **Report PUT/DELETE not implemented** — Out of scope for Phase 6-D.1.
+5. **Agent run creates record only** — Workflow execution is triggered but not yet wired to LangGraph runner.
+6. **No per-tab loading states** — Dashboard shows all-or-nothing loading.
+7. **No error boundaries** — Individual sections don't recover from errors independently.
+8. **LiteLLM Gateway not deployed** — Configured in docker-compose.yml but litellm service not included.
+9. **Embedding providers not connected** — Provider classes exist but actual HTTP calls may need testing.
+10. **Notification channels are stubs** — Email, Telegram, WeChat log only, no real delivery.
 8. **Embedding providers not connected** — Provider classes exist but actual HTTP calls may need testing.
 9. **Notification channels are stubs** — Email, Telegram, WeChat log only, no real delivery.
 
@@ -204,7 +209,9 @@ b3d14cc Phase 1: Project foundation scaffold
 
 ### Phase 6-D (Next)
 - ~~Write operations~~ ✅ COMPLETE (Phase 6-D.1)
-- Authentication (JWT, user registration, RBAC) — Phase 6-D.2
+- ~~Authentication~~ ✅ COMPLETE (Phase 6-D.2)
+- Refresh token endpoint (deferred)
+- Frontend auth UI (login form, token storage)
 - Observability (OpenTelemetry traces, Prometheus metrics)
 - Production deployment (Kubernetes manifests, CI/CD pipeline)
 

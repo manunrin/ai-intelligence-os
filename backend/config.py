@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     database_pool_min: int = 1
     database_pool_max: int = 10
 
+    # JWT
+    jwt_secret_key: str = ""
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_expire_minutes: int = 30
+
     redis_url: str = "redis://localhost:6379/0"
 
     qdrant_url: str = "http://localhost:6333"

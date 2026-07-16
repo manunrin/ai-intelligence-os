@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..schemas.response import APIResponse
 from ..schemas.task import TaskResponse
 from ..schemas.task_create import TaskCreate, TaskUpdate
-from .deps import get_db
+from .deps import get_current_user, get_db
 from .pagination import PaginationParams, get_pagination
 from ..services.task_service import TaskService
 
@@ -58,6 +58,7 @@ async def get_task(task_id: str, db=Depends(get_db)):
 )
 async def create_task(
     data: TaskCreate,
+    current_user: Any = Depends(get_current_user),
     db=Depends(get_db),
 ):
     service = TaskService(db)
@@ -75,6 +76,7 @@ async def create_task(
 async def update_task(
     task_id: str,
     data: TaskUpdate,
+    current_user: Any = Depends(get_current_user),
     db=Depends(get_db),
 ):
     service = TaskService(db)
@@ -91,7 +93,7 @@ async def update_task(
     operation_id="deleteTask",
     response_model=APIResponse[None],
 )
-async def delete_task(task_id: str, db=Depends(get_db)):
+async def delete_task(task_id: str, current_user: Any = Depends(get_current_user), db=Depends(get_db)):
     service = TaskService(db)
     deleted = await service.delete_task(task_id)
     if not deleted:

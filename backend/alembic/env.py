@@ -19,6 +19,7 @@ from backend.database.models import (  # noqa: F401 — import all models for au
     AgentRun,
     Workflow,
     UserPreference,
+    User,
 )
 
 config = context.config

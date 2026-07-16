@@ -9,6 +9,7 @@ from .agent import Agent
 from .agent_run import AgentRun
 from .workflow import Workflow
 from .user_preference import UserPreference
+from .user import User
 
 __all__ = [
     "Source",
@@ -20,4 +21,5 @@ __all__ = [
     "AgentRun",
     "Workflow",
     "UserPreference",
+    "User",
 ]
