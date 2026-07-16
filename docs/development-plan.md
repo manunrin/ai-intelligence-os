@@ -63,12 +63,16 @@
 - [ ] Daily workflow pipeline
 - [ ] Notification delivery system
 
-## Phase 6 — Monitoring & Observability
+## Phase 6 — Dashboard Integration & End-to-End API (COMPLETE)
 
-- [ ] OpenTelemetry instrumentation
-- [ ] Structured logging
-- [ ] Prometheus metrics
-- [ ] Grafana dashboards
+- [x] API foundation layer (Phase 6-A)
+- [x] Architecture review fixes (Phase 6-A.1)
+- [x] Business services wired to repositories (Phase 6-B)
+- [x] Dashboard connected to real APIs (Phase 6-C)
+- [ ] Pagination UI
+- [ ] Write operations (POST/PUT/DELETE)
+- [ ] Per-tab loading states
+- [ ] Error boundaries per section
 
 ## Phase 7 — Testing & CI/CD
 

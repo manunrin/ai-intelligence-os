@@ -62,8 +62,10 @@ AI Intelligence OS is a layered platform that transforms raw information into ac
 ### Frontend (`frontend/`)
 - Next.js App Router with TypeScript
 - TailwindCSS + shadcn/ui component library
-- Server components by default, client components where interactive
-- API client abstracted behind a single fetch wrapper
+- Client components for data fetching (dashboard uses `fetch` via custom API client)
+- API client with response envelope unwrapping (`unwrap()` helper)
+- CORS-aware: backend configured to allow frontend dev server origin
+- DataTable, Card, StatCard, Badge, Button, Input components
 
 ### Agents (`agents/`)
 - LangGraph state machines define agent workflows
@@ -92,6 +94,28 @@ AI Intelligence OS is a layered platform that transforms raw information into ac
 - Grafana dashboard definitions
 
 ## Data Flow
+
+### API Request → Response Flow
+
+```
+Dashboard (page.tsx)
+  ↓ Promise.all([
+  ↓   api.get("/api/v1/articles"),
+  ↓   api.get("/api/v1/knowledge"),
+  ↓   api.get("/api/v1/tasks"),
+  ↓   api.get("/api/v1/agents/runs"),
+  ↓   api.get("/api/v1/reports")
+  ↓ ])
+  ↓ unwrap<T>() extracts data from { success, data, error } envelope
+Backend FastAPI
+  ↓ CORSMiddleware (allows localhost:3000)
+  ↓ Router → Service → Repository → ORM
+  ↓ Returns APIResponse[T] envelope
+Frontend
+  ↓ unwrap() extracts T[] from data field
+  ↓ React state updated
+  ↓ DataTable / Card / StatCard render results
+```
 
 1. **Ingestion** — Scheduler triggers Research/Crawler agents → external sources
 2. **Analysis** — Analyst Agent evaluates importance, category, impact
