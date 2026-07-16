@@ -14,10 +14,21 @@ class FakeSessionCtx:
     """Context manager that yields a fake session without hitting the DB."""
 
     async def __aenter__(self):
-        return MagicMock()
+        return self
 
     async def __aexit__(self, *a):
         pass
+
+    async def execute(self, stmt):
+        class Result:
+            @staticmethod
+            def scalars():
+                class Scalars:
+                    @staticmethod
+                    def all():
+                        return []
+                return Scalars()
+        return Result()
 
 
 def _make_client() -> TestClient:

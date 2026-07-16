@@ -1,7 +1,4 @@
-"""Knowledge API router.
-
-TODO(Phase 6-B): Wire up KnowledgeService for actual data fetching.
-"""
+"""Knowledge API router."""
 
 from __future__ import annotations
 
@@ -31,7 +28,7 @@ async def list_knowledge(
     pagination: PaginationParams = Depends(get_pagination),
     db=Depends(get_db),
 ):
-    service = KnowledgeService()
+    service = KnowledgeService(db)
     items = await service.list_knowledge_items(
         offset=pagination.offset, limit=pagination.limit
     )

@@ -1,7 +1,4 @@
-"""Agent runs API router.
-
-TODO(Phase 6-B): Wire up AgentService for actual data fetching.
-"""
+"""Agent runs API router."""
 
 from __future__ import annotations
 
@@ -31,6 +28,6 @@ async def list_agent_runs(
     pagination: PaginationParams = Depends(get_pagination),
     db=Depends(get_db),
 ):
-    service = AgentService()
+    service = AgentService(db)
     runs = await service.list_agent_runs(offset=pagination.offset, limit=pagination.limit)
     return APIResponse(success=True, data=runs, error=None)

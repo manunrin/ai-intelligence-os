@@ -1,7 +1,4 @@
-"""Reports API router.
-
-TODO(Phase 6-B): Wire up ReportService for actual data fetching.
-"""
+"""Reports API router."""
 
 from __future__ import annotations
 
@@ -31,6 +28,6 @@ async def list_reports(
     pagination: PaginationParams = Depends(get_pagination),
     db=Depends(get_db),
 ):
-    service = ReportService()
+    service = ReportService(db)
     reports = await service.list_reports(offset=pagination.offset, limit=pagination.limit)
     return APIResponse(success=True, data=reports, error=None)

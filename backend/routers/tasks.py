@@ -1,7 +1,4 @@
-"""Tasks API router.
-
-TODO(Phase 6-B): Wire up TaskService for actual data fetching.
-"""
+"""Tasks API router."""
 
 from __future__ import annotations
 
@@ -31,6 +28,6 @@ async def list_tasks(
     pagination: PaginationParams = Depends(get_pagination),
     db=Depends(get_db),
 ):
-    service = TaskService()
+    service = TaskService(db)
     tasks = await service.list_tasks(offset=pagination.offset, limit=pagination.limit)
     return APIResponse(success=True, data=tasks, error=None)
