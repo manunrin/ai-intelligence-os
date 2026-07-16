@@ -7,7 +7,7 @@ from sqlalchemy import DateTime, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ...database.base import Base
+from ...database.base import Base, _utcnow
 
 
 class AgentRun(Base):

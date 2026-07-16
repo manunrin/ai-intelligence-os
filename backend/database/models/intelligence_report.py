@@ -7,7 +7,7 @@ from sqlalchemy import DateTime, Float, String, Text, CheckConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from ...database.base import Base
+from ...database.base import Base, _utcnow
 
 
 class IntelligenceReport(Base):
