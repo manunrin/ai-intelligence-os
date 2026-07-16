@@ -7,6 +7,7 @@ import logging
 from fastapi import FastAPI
 
 from .app.bootstrap import ApplicationBootstrap
+from .routers.api import api_router, register_exception_handlers, setup_middleware
 from .database.connection import get_engine
 
 logger = logging.getLogger(__name__)
@@ -50,13 +51,19 @@ def create_app() -> FastAPI:
         redoc_url="/api/redoc",
         lifespan=lifespan,
     )
+
+    # Register centralized exception handlers and middleware
+    register_exception_handlers(app)
+    setup_middleware(app)
+
+    # Register the single aggregated API router
+    app.include_router(api_router, prefix="/api/v1")
+
+    @app.get("/api/health", tags=["health"], summary="Health check", description="Health check endpoint for container orchestration.")
+    async def health_check():
+        return {"status": "ok"}
+
     return app
 
 
 app = create_app()
-
-
-@app.get("/api/health")
-async def health_check():
-    """Health check endpoint for container orchestration."""
-    return {"status": "ok"}

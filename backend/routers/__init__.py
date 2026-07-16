@@ -1,8 +1,5 @@
-"""API router registry."""
+"""API router package."""
 
-from fastapi import APIRouter
+from .api import api_router, register_exception_handlers, setup_middleware
 
-from .health import router as health_router
-
-api_router = APIRouter()
-api_router.include_router(health_router, prefix="/health", tags=["health"])
+__all__ = ["api_router", "register_exception_handlers", "setup_middleware"]
