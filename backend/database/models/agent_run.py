@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -14,8 +14,8 @@ class AgentRun(Base):
     __tablename__ = "agent_runs"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    agent_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
-    workflow_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    agent_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("agents.id"), nullable=False)
+    workflow_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("workflows.id"), nullable=True)
     status: Mapped[str] = mapped_column(String(16), default="running")
     input_payload: Mapped[dict] = mapped_column(JSONB, default=dict)
     output_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
@@ -27,7 +27,7 @@ class AgentRun(Base):
     agent = relationship("Agent", back_populates="runs", foreign_keys="AgentRun.agent_id")
     workflow = relationship("Workflow", back_populates="runs", foreign_keys="AgentRun.workflow_id")
     reports = relationship("IntelligenceReport", back_populates="agent_run", foreign_keys="IntelligenceReport.agent_run_id")
-    tasks = relationship("Task", foreign_keys="Task.agent_run_id", back_populates="agent_run", backref="agent_run_ref")
+    tasks = relationship("Task", foreign_keys="Task.agent_run_id", back_populates="agent_run")
 
     @property
     def duration(self) -> int | None:

@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, Float, String, Text, CheckConstraint
+from sqlalchemy import DateTime, Float, ForeignKey, String, Text, CheckConstraint
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -23,8 +23,8 @@ class IntelligenceReport(Base):
     category: Mapped[str | None] = mapped_column(String(64), nullable=True)
     importance_score: Mapped[float | None] = mapped_column(Float, nullable=True)
     article_ids: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), default=list)
-    agent_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    agent_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("agent_runs.id"), nullable=True)
     generated_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
-    agent_run = relationship("AgentRun", back_populates="reports", foreign_keys="AgentRun.report_id")
+    agent_run = relationship("AgentRun", back_populates="reports", foreign_keys="IntelligenceReport.agent_run_id")

@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     compatible_api_base: str = ""
     compatible_api_key: str = ""
 
-    model_config = {"env_file": ".env", "env_prefix": ""}
+    model_config = {"env_file": ".env", "env_prefix": "", "extra": "ignore"}
 
 
 def get_settings() -> Settings:
