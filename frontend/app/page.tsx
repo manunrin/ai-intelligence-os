@@ -166,7 +166,7 @@ export default function Home() {
                   error: "danger",
                 };
                 return (
-                  <Badge variant={statusColors[value as string] || "muted"}>
+                  <Badge variant={(statusColors[value as string] || "default") as "default" | "success" | "warning" | "danger" | "muted"}>
                     {String(value)}
                   </Badge>
                 );
