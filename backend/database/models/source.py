@@ -22,4 +22,4 @@ class Source(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
-    articles = relationship("Article", back_populates="source")
+    articles = relationship("Article", back_populates="source", foreign_keys="[Article.source_id]")

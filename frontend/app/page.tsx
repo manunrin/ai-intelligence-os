@@ -157,7 +157,7 @@ export default function Home() {
             ]}
             data={articles}
             rowKey="id"
-            renderCell={(key, value) => {
+            renderCell={(key: string, value: unknown) => {
               if (key === "status") {
                 const statusColors: Record<string, "default" | "success" | "warning" | "danger"> = {
                   raw: "warning",
@@ -188,7 +188,7 @@ export default function Home() {
             ]}
             data={knowledgeItems}
             rowKey="id"
-            renderCell={(key, value) => {
+            renderCell={(key: string, value: unknown) => {
               if (key === "tags" && Array.isArray(value)) {
                 return (
                   <div className="flex flex-wrap gap-1">
@@ -216,7 +216,7 @@ export default function Home() {
             ]}
             data={tasks}
             rowKey="id"
-            renderCell={(key, value) => {
+            renderCell={(key: string, value: unknown) => {
               if (key === "priority" || key === "status") {
                 const colors: Record<string, "default" | "success" | "warning" | "danger"> = {
                   low: "muted",
@@ -229,7 +229,7 @@ export default function Home() {
                   blocked: "danger",
                 };
                 return (
-                  <Badge variant={colors[value as string] || "muted"}>
+                  <Badge variant={(colors[value as string] || "default") as "default" | "success" | "warning" | "danger" | "muted"}>
                     {String(value)}
                   </Badge>
                 );
@@ -247,7 +247,7 @@ export default function Home() {
             ]}
             data={agentRuns}
             rowKey="id"
-            renderCell={(key, value) => {
+            renderCell={(key: string, value: unknown) => {
               if (key === "status") {
                 const colors: Record<string, "default" | "success" | "warning" | "danger"> = {
                   pending: "muted",
@@ -256,7 +256,7 @@ export default function Home() {
                   failed: "danger",
                 };
                 return (
-                  <Badge variant={colors[value as string] || "muted"}>
+                  <Badge variant={(colors[value as string] || "default") as "default" | "success" | "warning" | "danger" | "muted"}>
                     {String(value)}
                   </Badge>
                 );
