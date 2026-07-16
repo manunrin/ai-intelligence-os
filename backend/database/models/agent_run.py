@@ -24,10 +24,10 @@ class AgentRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(nullable=True)
 
-    agent = relationship("Agent", back_populates="runs")
-    workflow = relationship("Workflow", back_populates="runs")
-    reports = relationship("IntelligenceReport", back_populates="agent_run")
-    tasks = relationship("Task", foreign_keys="Task.agent_run_id", backref="agent_run_ref")
+    agent = relationship("Agent", back_populates="runs", foreign_keys="AgentRun.agent_id")
+    workflow = relationship("Workflow", back_populates="runs", foreign_keys="AgentRun.workflow_id")
+    reports = relationship("IntelligenceReport", back_populates="agent_run", foreign_keys="IntelligenceReport.agent_run_id")
+    tasks = relationship("Task", foreign_keys="Task.agent_run_id", back_populates="agent_run", backref="agent_run_ref")
 
     @property
     def duration(self) -> int | None:

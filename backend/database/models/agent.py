@@ -23,4 +23,4 @@ class Agent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
-    runs = relationship("AgentRun", back_populates="agent")
+    runs = relationship("AgentRun", back_populates="agent", foreign_keys="AgentRun.agent_id")

@@ -23,4 +23,4 @@ class Workflow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
 
-    runs = relationship("AgentRun", back_populates="workflow")
+    runs = relationship("AgentRun", back_populates="workflow", foreign_keys="AgentRun.workflow_id")

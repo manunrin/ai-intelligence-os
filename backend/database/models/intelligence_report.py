@@ -27,4 +27,4 @@ class IntelligenceReport(Base):
     generated_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
-    agent_run = relationship("AgentRun", back_populates="reports")
+    agent_run = relationship("AgentRun", back_populates="reports", foreign_keys="AgentRun.report_id")
