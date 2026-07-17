@@ -197,7 +197,7 @@ export default function Home() {
             )}
 
             {activeTab === "agents" && (
-              <AgentsPanel runs={agentRuns} />
+              <AgentsPanel runs={agentRuns} isLoading={loadingAgents} />
             )}
 
             {activeTab === "reports" && (

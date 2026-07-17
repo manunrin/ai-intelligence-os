@@ -29,11 +29,13 @@ export type AgentRun = {
   agent_id: string;
   workflow_id: string | null;
   status: string;
+  stage: string;
   input_payload: Record<string, unknown>;
   output_payload: Record<string, unknown> | null;
   error_message: string | null;
   started_at: string;
   finished_at: string | null;
+  duration_ms: number | null;
   user_id: string | null;
 } & Record<string, unknown>;
 

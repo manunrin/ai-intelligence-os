@@ -143,6 +143,7 @@ async def submit_agent_run(
 
     # Merge input_payload with convenience fields
     payload = dict(body.input_payload)
+    payload["_agent_type"] = body.agent_type
     if body.topic:
         payload["topic"] = body.topic
     if body.source_id:
@@ -167,6 +168,7 @@ async def submit_agent_run(
 async def stream_agent_status(
     run_id: str,
     request: Request,
+    current_user: Any = Depends(get_current_user),
     db=Depends(get_db),
 ):
     service = _make_runtime_service(db)
