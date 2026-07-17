@@ -24,39 +24,39 @@ class TrackingService:
     def __init__(self, db):
         self._db = db
 
-    async def get_knowledge_item(self, iid):
+    async def get_knowledge_item(self, iid, user_id=None):
         return {
             "id": str(uuid.uuid4()), "title": "Found", "content": "Here",
             "kind": "note", "article_id": None, "tags": [],
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    async def create_knowledge_item(self, data):
+    async def create_knowledge_item(self, data, user_id=None):
         return {
             "id": str(uuid.uuid4()), "title": "New Item", "content": "Data",
             "kind": "note", "article_id": None, "tags": ["test"],
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    async def update_knowledge_item(self, iid, data):
+    async def update_knowledge_item(self, iid, data, user_id=None):
         return {
             "id": str(uuid.uuid4()), "title": "Updated", "content": "Here",
             "kind": "note", "article_id": None, "tags": [],
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    async def delete_knowledge_item(self, iid):
+    async def delete_knowledge_item(self, iid, user_id=None):
         return True
 
 
 class NotFoundService(TrackingService):
-    async def get_knowledge_item(self, iid):
+    async def get_knowledge_item(self, iid, user_id=None):
         return None
 
-    async def update_knowledge_item(self, iid, data):
+    async def update_knowledge_item(self, iid, data, user_id=None):
         return None
 
-    async def delete_knowledge_item(self, iid):
+    async def delete_knowledge_item(self, iid, user_id=None):
         return False
 
 
@@ -86,7 +86,7 @@ class TestKnowledgeCreate:
     def test_post_create(self):
         client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.knowledge.KnowledgeService", TrackingService):
+            with patch("backend.routers.knowledge.KnowledgeItemService", TrackingService):
                 resp = client.post("/api/v1/knowledge", json={
                     "title": "New Item", "content": "Data", "kind": "note"
                 })
@@ -106,7 +106,7 @@ class TestKnowledgeGetById:
     def test_get_found(self):
         client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.knowledge.KnowledgeService", TrackingService):
+            with patch("backend.routers.knowledge.KnowledgeItemService", TrackingService):
                 resp = client.get(f"/api/v1/knowledge/{uuid.uuid4()}")
         assert resp.status_code == 200
         app.dependency_overrides.clear()
@@ -114,7 +114,7 @@ class TestKnowledgeGetById:
     def test_get_not_found_returns_404(self):
         client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.knowledge.KnowledgeService", NotFoundService):
+            with patch("backend.routers.knowledge.KnowledgeItemService", NotFoundService):
                 resp = client.get(f"/api/v1/knowledge/{uuid.uuid4()}")
         assert resp.status_code == 404
         app.dependency_overrides.clear()
@@ -124,7 +124,7 @@ class TestKnowledgeUpdate:
     def test_put_update(self):
         client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.knowledge.KnowledgeService", TrackingService):
+            with patch("backend.routers.knowledge.KnowledgeItemService", TrackingService):
                 resp = client.put(f"/api/v1/knowledge/{uuid.uuid4()}", json={"title": "Updated"})
         assert resp.status_code == 200
         app.dependency_overrides.clear()
@@ -132,7 +132,7 @@ class TestKnowledgeUpdate:
     def test_put_not_found_returns_404(self):
         client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.knowledge.KnowledgeService", NotFoundService):
+            with patch("backend.routers.knowledge.KnowledgeItemService", NotFoundService):
                 resp = client.put(f"/api/v1/knowledge/{uuid.uuid4()}", json={"title": "X"})
         assert resp.status_code == 404
         app.dependency_overrides.clear()
@@ -142,7 +142,7 @@ class TestKnowledgeDelete:
     def test_delete_success(self):
         client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.knowledge.KnowledgeService", TrackingService):
+            with patch("backend.routers.knowledge.KnowledgeItemService", TrackingService):
                 resp = client.delete(f"/api/v1/knowledge/{uuid.uuid4()}")
         assert resp.status_code == 200
         app.dependency_overrides.clear()
@@ -150,7 +150,7 @@ class TestKnowledgeDelete:
     def test_delete_not_found_returns_404(self):
         client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.knowledge.KnowledgeService", NotFoundService):
+            with patch("backend.routers.knowledge.KnowledgeItemService", NotFoundService):
                 resp = client.delete(f"/api/v1/knowledge/{uuid.uuid4()}")
         assert resp.status_code == 404
         app.dependency_overrides.clear()

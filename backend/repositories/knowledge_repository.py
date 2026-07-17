@@ -27,3 +27,8 @@ class KnowledgeItemRepository(BaseRepository[KnowledgeItem]):
         stmt = select(KnowledgeItem).where(KnowledgeItem.article_id == article_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_by_user(self, user_id: Any, offset: int = 0, limit: int = 20) -> list[KnowledgeItem]:
+        stmt = select(KnowledgeItem).where(KnowledgeItem.user_id == user_id).offset(offset).limit(limit)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

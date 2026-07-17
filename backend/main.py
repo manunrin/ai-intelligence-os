@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .app.bootstrap import ApplicationBootstrap
 from .routers.api import api_router, register_exception_handlers, setup_middleware
 from .routers.deps import get_db
-from .database.connection import create_engine_for_settings, get_session_factory
+from .database.connection import create_engine_for_settings
 
 logger = logging.getLogger(__name__)
 
@@ -31,16 +31,17 @@ async def lifespan(app: FastAPI):
     logger.info("Starting AI Intelligence OS backend...")
 
     # Initialize engine explicitly at startup (not lazily)
-    engine = create_engine_for_settings(get_settings())
+    engine, session_factory = create_engine_for_settings(get_settings())
 
     # Initialize MCP servers, tool registry, and agents
-    _bootstrap = ApplicationBootstrap()
+    _bootstrap = ApplicationBootstrap(session_factory)
     _bootstrap.initialize()
 
     app.state.bootstrap = _bootstrap
     app.state.mcp_registry = _bootstrap.mcp_registry
     app.state.tool_registry = _bootstrap.tool_registry
     app.state.event_publisher = _bootstrap.event_publisher
+    app.state.session_factory = session_factory
 
     logger.info("Backend startup complete — MCP servers: %s", list(_bootstrap.mcp_registry.list_servers().keys()))
 
@@ -64,8 +65,8 @@ def create_app() -> FastAPI:
         title="AI Intelligence OS",
         version="0.1.0",
         description="Enterprise AI Intelligence Operating System",
-        docs_url="/api/docs",
-        redoc_url="/api/redoc",
+        docs_url="/api/docs" if os.getenv("APP_ENV", "development") != "production" else None,
+        redoc_url="/api/redoc" if os.getenv("APP_ENV", "development") != "production" else None,
         lifespan=lifespan,
     )
 
@@ -119,7 +120,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=allowed_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["Authorization", "Content-Type", "Accept"],
         max_age=600,
     )

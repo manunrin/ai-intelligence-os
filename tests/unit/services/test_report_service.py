@@ -58,10 +58,11 @@ class TestReportServiceCreate:
         fake.agent_run_id = None
         fake.generated_by = None
         fake.created_at = datetime.now(timezone.utc)
+        fake.user_id = None
         service._repo.create = AsyncMock(return_value=fake)
 
         data = ReportCreate(title="New Report", body="Body text")
-        result = await service.create_report(data)
+        result = await service.create_report(data, user_id=uuid.uuid4())
         assert result["topic"] == "New Report"
 
     @pytest.mark.asyncio
@@ -82,42 +83,67 @@ class TestReportServiceCreate:
 
 class TestReportServiceUpdate:
     @pytest.mark.asyncio
-    async def test_update_found(self, service, fake_report):
-        service._repo.get_by_id = AsyncMock(return_value=fake_report)
+    async def test_update_found(self, service):
+        test_user_id = uuid.uuid4()
+        fake = MagicMock()
+        fake.id = uuid.uuid4()
+        fake.title = "Test Report"
+        fake.body = "Report body"
+        fake.category = "security"
+        fake.importance_score = 7.5
+        fake.article_ids = []
+        fake.agent_run_id = None
+        fake.generated_by = None
+        fake.created_at = datetime.now(timezone.utc)
+        fake.user_id = test_user_id
+        service._repo.get_by_id = AsyncMock(return_value=fake)
         updated = MagicMock()
-        updated.id = fake_report.id
+        updated.id = fake.id
         updated.title = "Updated Report"
-        updated.body = fake_report.body
-        updated.category = fake_report.category
-        updated.importance_score = fake_report.importance_score
-        updated.article_ids = fake_report.article_ids
-        updated.agent_run_id = fake_report.agent_run_id
-        updated.generated_by = fake_report.generated_by
-        updated.created_at = fake_report.created_at
+        updated.body = fake.body
+        updated.category = fake.category
+        updated.importance_score = fake.importance_score
+        updated.article_ids = fake.article_ids
+        updated.agent_run_id = fake.agent_run_id
+        updated.generated_by = fake.generated_by
+        updated.created_at = fake.created_at
+        updated.user_id = fake.user_id
         service._repo.update = AsyncMock(return_value=updated)
 
         data = ReportUpdate(title="Updated Report")
-        result = await service.update_report(str(fake_report.id), data)
+        result = await service.update_report(str(fake.id), data, user_id=test_user_id)
         assert result["topic"] == "Updated Report"
 
     @pytest.mark.asyncio
     async def test_update_not_found(self, service):
         service._repo.get_by_id = AsyncMock(return_value=None)
         result = await service.update_report(
-            str(uuid.uuid4()), ReportUpdate(title="X")
+            str(uuid.uuid4()), ReportUpdate(title="X"), user_id=uuid.uuid4()
         )
         assert result is None
 
 
 class TestReportServiceGet:
     @pytest.mark.asyncio
-    async def test_get_found(self, service, fake_report):
-        service._repo.get_by_id = AsyncMock(return_value=fake_report)
-        result = await service.get_report(str(fake_report.id))
+    async def test_get_found(self, service):
+        test_user_id = uuid.uuid4()
+        fake = MagicMock()
+        fake.id = uuid.uuid4()
+        fake.title = "Test Report"
+        fake.body = "Report body"
+        fake.category = "security"
+        fake.importance_score = 7.5
+        fake.article_ids = []
+        fake.agent_run_id = None
+        fake.generated_by = None
+        fake.created_at = datetime.now(timezone.utc)
+        fake.user_id = test_user_id
+        service._repo.get_by_id = AsyncMock(return_value=fake)
+        result = await service.get_report(str(fake.id), user_id=test_user_id)
         assert result is not None
         assert result["topic"] == "Test Report"
 
     @pytest.mark.asyncio
     async def test_get_not_found(self, service):
         service._repo.get_by_id = AsyncMock(return_value=None)
-        assert await service.get_report(str(uuid.uuid4())) is None
+        assert await service.get_report(str(uuid.uuid4()), user_id=uuid.uuid4()) is None

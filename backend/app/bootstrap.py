@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 import logging
+from typing import Any, Callable
 
-from backend.database.connection import get_session_factory
+from backend.database.connection import AsyncSession
 from backend.events.publisher import EventPublisher
 from backend.mcp.registry import MCPRegistry
 from backend.mcp.servers.asana.server import AsanaMCPServer
 from backend.mcp.servers.browser.server import BrowserMCPServer
 from backend.mcp.servers.github.server import GitHubMCPServer
-from backend.mcp.servers.notion.server import NotionMCPServer
 from backend.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -26,7 +26,8 @@ class ApplicationBootstrap:
     - EventPublisher with AuditLogSubscriber registered
     """
 
-    def __init__(self) -> None:
+    def __init__(self, session_factory: Callable[[], AsyncSession]) -> None:
+        self._session_factory = session_factory
         self.mcp_registry = MCPRegistry()
         self.tool_registry = ToolRegistry()
         self.event_publisher = EventPublisher()
@@ -43,16 +44,8 @@ class ApplicationBootstrap:
 
         # Register audit log subscriber
         from backend.events.subscriber import AuditLogSubscriber
-        from ..database.connection import get_session_factory as _gsf
 
-        # _gsf() returns the async_sessionmaker singleton; wrap it so
-        # the subscriber receives actual AsyncSession instances.
-        _session_maker_singleton = _gsf()
-
-        def _session_maker():
-            return _session_maker_singleton()
-
-        subscriber = AuditLogSubscriber(_session_maker)
+        subscriber = AuditLogSubscriber(self._session_factory)
         self.event_publisher.subscribe(
             type("AuditLogEvent", (), {"__name__": "AuditLogEvent"}), subscriber.handle
         )

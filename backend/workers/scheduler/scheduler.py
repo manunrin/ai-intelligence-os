@@ -6,10 +6,10 @@ import logging
 from typing import Any
 
 try:
-    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.cron import CronTrigger
 except ImportError:
-    AsyncIOScheduler = None  # type: ignore
+    BackgroundScheduler = None  # type: ignore
     CronTrigger = None  # type: ignore
 
 from ...connectors.base import SourceConnector
@@ -27,12 +27,12 @@ class JobScheduler:
 
     def start(self) -> None:
         """Start the scheduler."""
-        if AsyncIOScheduler is None:
+        if BackgroundScheduler is None:
             logger.warning("APScheduler not installed — scheduled jobs disabled")
             return
-        self._scheduler = AsyncIOScheduler()
+        self._scheduler = BackgroundScheduler()
         self._scheduler.start()
-        logger.info("JobScheduler started")
+        logger.info("JobScheduler started (BackgroundScheduler)")
 
     def stop(self) -> None:
         """Shutdown the scheduler."""

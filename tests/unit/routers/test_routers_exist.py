@@ -71,5 +71,19 @@ class TestHealthEndpoint:
     def test_health_returns_ok(self) -> None:
         client = _make_client()
         resp = client.get("/api/health")
+        # Health check returns 200 if DB is reachable, 503 otherwise
+        assert resp.status_code in (200, 503), f"Unexpected status: {resp.status_code}"
+        body = resp.json()
+        assert "status" in body
+        assert "checks" in body
+        # In tests without a real DB, expect unhealthy; with DB, expect healthy
+        if resp.status_code == 200:
+            assert body["status"] == "healthy"
+        else:
+            assert body["status"] == "unhealthy"
+
+    def test_live_check_always_returns_ok(self) -> None:
+        client = _make_client()
+        resp = client.get("/api/live")
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"

@@ -88,6 +88,8 @@ class AgentRuntimeService:
     def __init__(
         self,
         session_or_factory: AsyncSession | Callable[[], AsyncSession],
+        *,
+        session_factory: Callable[[], AsyncSession] | None = None,
     ) -> None:
         if isinstance(session_or_factory, async_sessionmaker):
             # sessionmaker — use it for both request and bg tasks
@@ -98,13 +100,17 @@ class AgentRuntimeService:
             self._session_factory = session_or_factory
             self._request_session = session_or_factory()
         else:
-            # Direct AsyncSession (request-scoped)
+            # Direct AsyncSession (request-scoped) — for background tasks we need our own
+            # session since the request-scoped one will be closed when the response sends.
+            # The factory must be provided explicitly by the caller.
             self._request_session = session_or_factory
-            # For background tasks we need our own session since the
-            # request-scoped one will be closed when the response sends.
-            from ..database.connection import get_session_factory as _gsf
-            sf = _gsf()
-            self._session_factory = lambda: sf()
+            if session_factory is not None:
+                self._session_factory = session_factory
+            else:
+                raise ValueError(
+                    "AgentRuntimeService requires a session_factory when "
+                    "initialized with a direct AsyncSession"
+                )
         self._executor: Executor = SyncExecutor()
         self._cancellation_tokens: dict[uuid.UUID, bool] = {}
         self._run_tasks: dict[uuid.UUID, asyncio.Task | None] = {}

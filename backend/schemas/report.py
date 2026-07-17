@@ -18,5 +18,6 @@ class IntelligenceReportResponse(BaseModel):
     knowledge_items: list[dict] = Field(default_factory=list)
     tasks: list[dict] = Field(default_factory=list)
     created_at: datetime
+    user_id: str | None = None
 
     model_config = {"from_attributes": True}

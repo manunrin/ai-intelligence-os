@@ -2,15 +2,35 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Any
 
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+
+from ..schemas.error import ErrorResponse
 from ..schemas.response import APIResponse
 from ..schemas.user import TokenResponse, UserCreate, UserLogin, UserResponse
-from .deps import get_db
+from .deps import get_current_user, get_db
+from ..config import get_settings
+from ..rate_limiter import limiter
+
+
+def _login_rate_limit():
+    """Return rate limit string from settings."""
+    s = get_settings()
+    return f"{s.rate_limit_login_requests} per {s.rate_limit_login_window_seconds} seconds"
 
 router = APIRouter(
     prefix="/auth",
     tags=["authentication"],
+    responses={
+        400: {"model": ErrorResponse, "description": "Bad request"},
+        401: {"model": ErrorResponse, "description": "Unauthorized — invalid or missing token"},
+        403: {"model": ErrorResponse, "description": "Forbidden — account deactivated or insufficient role"},
+        404: {"model": ErrorResponse, "description": "Resource not found"},
+        409: {"model": ErrorResponse, "description": "Conflict — username already exists"},
+        422: {"model": ErrorResponse, "description": "Validation error"},
+        500: {"model": ErrorResponse, "description": "Internal server error"},
+    },
 )
 
 
@@ -22,10 +42,15 @@ router = APIRouter(
     response_model=APIResponse[UserResponse],
     status_code=status.HTTP_201_CREATED,
 )
-async def register(data: UserCreate, db=Depends(get_db)):
-    from ..services.user_service import UserService
-
-    service = UserService(db)
+@limiter.limit(_login_rate_limit())
+async def register(data: UserCreate, request: Request, db=Depends(get_db)):
+    # Read from services module so patch() works in tests
+    svc_mod = __import__("sys").modules.get("backend.services.user_service")
+    if svc_mod is None:
+        from ..services.user_service import UserService as UserServiceCls
+    else:
+        UserServiceCls = getattr(svc_mod, "UserService")
+    service = UserServiceCls(db)
     try:
         user = await service.register(data)
     except ValueError as exc:
@@ -40,10 +65,15 @@ async def register(data: UserCreate, db=Depends(get_db)):
     operation_id="loginUser",
     response_model=APIResponse[TokenResponse],
 )
-async def login(data: UserLogin, db=Depends(get_db)):
-    from ..services.user_service import UserService
-
-    service = UserService(db)
+@limiter.limit(_login_rate_limit())
+async def login(data: UserLogin, request: Request, db=Depends(get_db)):
+    # Read from services module so patch() works in tests
+    svc_mod = __import__("sys").modules.get("backend.services.user_service")
+    if svc_mod is None:
+        from ..services.user_service import UserService as UserServiceCls
+    else:
+        UserServiceCls = getattr(svc_mod, "UserService")
+    service = UserServiceCls(db)
     user = await service.authenticate(data)
     if user is None:
         raise HTTPException(
@@ -65,24 +95,12 @@ async def login(data: UserLogin, db=Depends(get_db)):
     operation_id="getCurrentUser",
     response_model=APIResponse[UserResponse],
 )
-async def get_me(token: str, db=Depends(get_db)):
+async def get_me(current_user: Any = Depends(get_current_user), db=Depends(get_db)):
     """Protected endpoint — requires valid JWT."""
-    from ..config import get_settings
-    from ..utils.jwt import decode_access_token
-
-    settings = get_settings()
-    payload = decode_access_token(token, settings)
-    if payload is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
-    user_id = payload.get("sub")
-    if not user_id:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
-
     from ..services.user_service import UserService
 
     service = UserService(db)
-    user = await service.get_user(user_id)
+    user = await service.get_user(current_user.id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return APIResponse(success=True, data=user, error=None)

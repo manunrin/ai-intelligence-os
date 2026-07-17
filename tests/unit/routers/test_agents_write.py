@@ -23,7 +23,7 @@ class FakeSessionCtx:
 class TrackingRuntimeService:
     """Minimal mock of AgentRuntimeService for endpoint testing."""
 
-    def __init__(self, db):
+    def __init__(self, db, session_factory=None):
         self._db = db
 
     async def submit(self, agent_type, input_payload, user_id, *, timeout_seconds=300):

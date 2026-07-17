@@ -27,3 +27,8 @@ class TaskRepository(BaseRepository[Task]):
         stmt = select(Task).where(Task.knowledge_item_id == knowledge_item_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_by_user(self, user_id: Any, offset: int = 0, limit: int = 20) -> list[Task]:
+        stmt = select(Task).where(Task.user_id == user_id).offset(offset).limit(limit)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

@@ -24,7 +24,7 @@ class TrackingService:
     def __init__(self, db):
         self._db = db
 
-    async def get_report(self, rid):
+    async def get_report(self, rid, user_id=None):
         return {
             "id": str(uuid.uuid4()), "topic": "Found",
             "research_result": None, "analysis_result": None,
@@ -32,7 +32,7 @@ class TrackingService:
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    async def create_report(self, data):
+    async def create_report(self, data, user_id=None):
         return {
             "id": str(uuid.uuid4()), "topic": "New Report",
             "research_result": None, "analysis_result": None,
@@ -42,7 +42,7 @@ class TrackingService:
 
 
 class NotFoundService(TrackingService):
-    async def get_report(self, rid):
+    async def get_report(self, rid, user_id=None):
         return None
 
 

@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ...database.base import Base, _utcnow
 
@@ -24,3 +24,9 @@ class User(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, onupdate=_utcnow)
+
+    articles = relationship("Article", back_populates="user")
+    tasks = relationship("Task", back_populates="user")
+    knowledge_items = relationship("KnowledgeItem", back_populates="user")
+    reports = relationship("IntelligenceReport", back_populates="user")
+    agent_runs = relationship("AgentRun", back_populates="user", foreign_keys="AgentRun.user_id")

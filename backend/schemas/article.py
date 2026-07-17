@@ -21,5 +21,6 @@ class ArticleResponse(BaseModel):
     status: str = Field(default="raw")
     fetched_at: datetime
     published_at: datetime | None = None
+    user_id: str | None = None
 
     model_config = {"from_attributes": True}

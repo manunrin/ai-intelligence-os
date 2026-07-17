@@ -23,7 +23,7 @@ class FakeSessionCtx:
 class ProtectedTrackingService:
     """Mock service that returns predictable responses."""
 
-    def __init__(self, db):
+    def __init__(self, db, session_factory=None):
         self._db = db
 
     async def create_article(self, data, user_id):
@@ -191,7 +191,7 @@ class TestProtectedEndpointsWithValidToken:
     def test_knowledge_post_with_token(self):
         client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.knowledge.KnowledgeService", ProtectedTrackingService):
+            with patch("backend.routers.knowledge.KnowledgeItemService", ProtectedTrackingService):
                 resp = client.post(
                     "/api/v1/knowledge",
                     json={"title": "Test", "content": "Data", "kind": "note"},

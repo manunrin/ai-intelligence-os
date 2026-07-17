@@ -24,39 +24,39 @@ class TrackingService:
     def __init__(self, db):
         self._db = db
 
-    async def get_task(self, tid):
+    async def get_task(self, tid, user_id=None):
         return {
             "id": str(uuid.uuid4()), "title": "Found", "description": None,
             "priority": "high", "status": "pending", "dependency": [],
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    async def create_task(self, data):
+    async def create_task(self, data, user_id=None):
         return {
             "id": str(uuid.uuid4()), "title": "New Task", "description": None,
             "priority": "medium", "status": "pending", "dependency": [],
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    async def update_task(self, tid, data):
+    async def update_task(self, tid, data, user_id=None):
         return {
             "id": str(uuid.uuid4()), "title": "Updated", "description": None,
             "priority": "high", "status": "in_progress", "dependency": [],
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
 
-    async def delete_task(self, tid):
+    async def delete_task(self, tid, user_id=None):
         return True
 
 
 class NotFoundService(TrackingService):
-    async def get_task(self, tid):
+    async def get_task(self, tid, user_id=None):
         return None
 
-    async def update_task(self, tid, data):
+    async def update_task(self, tid, data, user_id=None):
         return None
 
-    async def delete_task(self, tid):
+    async def delete_task(self, tid, user_id=None):
         return False
 
 

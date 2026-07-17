@@ -25,6 +25,10 @@ class IntelligenceReport(Base):
     article_ids: Mapped[list[uuid.UUID]] = mapped_column(ARRAY(UUID(as_uuid=True)), default=list)
     agent_run_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("agent_runs.id"), nullable=True)
     generated_by: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     agent_run = relationship("AgentRun", back_populates="reports", foreign_keys="IntelligenceReport.agent_run_id")
+    user = relationship("User", back_populates="reports")

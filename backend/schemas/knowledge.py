@@ -17,5 +17,6 @@ class KnowledgeItemResponse(BaseModel):
     article_id: str | None = None
     tags: list[str] = Field(default_factory=list)
     created_at: datetime
+    user_id: str | None = None
 
     model_config = {"from_attributes": True}

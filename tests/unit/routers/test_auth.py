@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,11 +13,20 @@ from backend.main import create_app
 
 
 class FakeSessionCtx:
-    async def __aenter__(self):
-        return MagicMock()
+    """Minimal async session that returns empty results for queries."""
 
-    async def __aexit__(self, *a):
-        pass
+    def __init__(self):
+        self.commit = AsyncMock()
+        self.rollback = AsyncMock()
+        self.close = AsyncMock()
+        self.add = AsyncMock()
+        self.flush = AsyncMock()
+
+        _result = MagicMock()
+        _result.scalars = MagicMock(return_value=_result)
+        _result.all = MagicMock(return_value=[])
+        _result.scalar_one_or_none = MagicMock(return_value=None)
+        self.execute = AsyncMock(return_value=_result)
 
 
 class MockUserService:
@@ -54,7 +63,12 @@ class MockUserService:
 
     async def get_user(self, user_id):
         user = MagicMock()
-        user.id = uuid.UUID(user_id)
+        if isinstance(user_id, uuid.UUID):
+            user.id = str(user_id)
+        elif isinstance(user_id, str):
+            user.id = user_id
+        else:
+            user.id = str(user_id)
         user.username = "validuser"
         user.email = "valid@example.com"
         user.role = "user"
@@ -65,7 +79,6 @@ class MockUserService:
 
 
 def _make_client():
-    from backend.main import create_app
     from backend.routers.deps import get_current_user
 
     fake_user = MagicMock()
@@ -75,6 +88,9 @@ def _make_client():
     fake_user.is_active = True
 
     app = create_app()
+
+    # A1: session_factory must be callable that returns a real fake session
+    app.state.session_factory = FakeSessionCtx
 
     async def mock_get_current_user():
         return fake_user
@@ -86,13 +102,12 @@ def _make_client():
 class TestAuthRegister:
     def test_register_success(self):
         client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.services.user_service.UserService", MockUserService):
-                resp = client.post("/api/v1/auth/register", json={
-                    "username": "newuser",
-                    "email": "new@example.com",
-                    "password": "securepass123",
-                })
+        with patch("backend.services.user_service.UserService", MockUserService):
+            resp = client.post("/api/v1/auth/register", json={
+                "username": "newuser",
+                "email": "new@example.com",
+                "password": "securepass123",
+            })
         assert resp.status_code == 201
         body = resp.json()
         assert body["success"] is True
@@ -101,24 +116,22 @@ class TestAuthRegister:
 
     def test_register_duplicate_username(self):
         client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.services.user_service.UserService", MockUserService):
-                resp = client.post("/api/v1/auth/register", json={
-                    "username": "taken",
-                    "email": "other@example.com",
-                    "password": "securepass123",
-                })
+        with patch("backend.services.user_service.UserService", MockUserService):
+            resp = client.post("/api/v1/auth/register", json={
+                "username": "taken",
+                "email": "other@example.com",
+                "password": "securepass123",
+            })
         assert resp.status_code == 409
         app.dependency_overrides.clear()
 
     def test_register_validation_error_short_password(self):
         client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            resp = client.post("/api/v1/auth/register", json={
-                "username": "newuser",
-                "email": "new@example.com",
-                "password": "short",
-            })
+        resp = client.post("/api/v1/auth/register", json={
+            "username": "newuser",
+            "email": "new@example.com",
+            "password": "short",
+        })
         assert resp.status_code == 422
         app.dependency_overrides.clear()
 
@@ -126,12 +139,11 @@ class TestAuthRegister:
 class TestAuthLogin:
     def test_login_success(self):
         client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.services.user_service.UserService", MockUserService):
-                resp = client.post("/api/v1/auth/login", json={
-                    "username": "validuser",
-                    "password": "correctpass123",
-                })
+        with patch("backend.services.user_service.UserService", MockUserService):
+            resp = client.post("/api/v1/auth/login", json={
+                "username": "validuser",
+                "password": "correctpass123",
+            })
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
@@ -141,30 +153,31 @@ class TestAuthLogin:
 
     def test_login_wrong_password(self):
         client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.services.user_service.UserService", MockUserService):
-                resp = client.post("/api/v1/auth/login", json={
-                    "username": "validuser",
-                    "password": "wrongpassword",
-                })
+        with patch("backend.services.user_service.UserService", MockUserService):
+            resp = client.post("/api/v1/auth/login", json={
+                "username": "validuser",
+                "password": "wrongpassword",
+            })
         assert resp.status_code == 401
         app.dependency_overrides.clear()
 
     def test_login_missing_fields(self):
         client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            resp = client.post("/api/v1/auth/login", json={"username": "u"})
+        resp = client.post("/api/v1/auth/login", json={"username": "u"})
         assert resp.status_code == 422
         app.dependency_overrides.clear()
 
 
 class TestAuthMe:
     def test_get_me_with_valid_token(self):
+        """Dependency override provides a fake user, so we get 200."""
         client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.services.user_service.UserService", MockUserService):
-                resp = client.get("/api/v1/auth/me", headers={"Authorization": "Bearer fake-token"})
-        # Token decode will fail (not a real JWT), so we get 401
-        # OAuth2PasswordBearer may also return 422 for non-form tokens
-        assert resp.status_code in (401, 422)
+        with patch("backend.services.user_service.UserService", MockUserService):
+            resp = client.get("/api/v1/auth/me")
+        # get_current_user is overridden → 200 with fake user data
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        # MockUserService.get_user returns "validuser" for any user_id
+        assert body["data"]["username"] == "validuser"
         app.dependency_overrides.clear()

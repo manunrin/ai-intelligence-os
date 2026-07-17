@@ -19,3 +19,8 @@ class IntelligenceReportRepository(BaseRepository[IntelligenceReport]):
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_by_user(self, user_id: Any, offset: int = 0, limit: int = 20) -> list[IntelligenceReport]:
+        stmt = select(IntelligenceReport).where(IntelligenceReport.user_id == user_id).offset(offset).limit(limit)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

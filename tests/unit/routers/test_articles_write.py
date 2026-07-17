@@ -26,7 +26,7 @@ class TrackingService:
     def __init__(self, db):
         self._db = db
 
-    async def get_article(self, aid):
+    async def get_article(self, aid, user_id=None):
         return {
             "id": str(uuid.uuid4()), "title": "Found", "source": "rss",
             "status": "raw", "language": "en", "tags": [], "summary": "S",
@@ -35,7 +35,7 @@ class TrackingService:
             "published_at": None,
         }
 
-    async def create_article(self, data):
+    async def create_article(self, data, user_id=None):
         return {
             "id": str(uuid.uuid4()), "title": "Created", "source": "rss",
             "status": "raw", "language": "en", "tags": [], "summary": None,
@@ -44,7 +44,7 @@ class TrackingService:
             "published_at": None,
         }
 
-    async def update_article(self, aid, data):
+    async def update_article(self, aid, data, user_id=None):
         return {
             "id": str(uuid.uuid4()), "title": "Updated", "source": "rss",
             "status": "raw", "language": "en", "tags": [], "summary": None,
@@ -53,18 +53,18 @@ class TrackingService:
             "published_at": None,
         }
 
-    async def delete_article(self, aid):
+    async def delete_article(self, aid, user_id=None):
         return True
 
 
 class NotFoundService(TrackingService):
-    async def get_article(self, aid):
+    async def get_article(self, aid, user_id=None):
         return None
 
-    async def update_article(self, aid, data):
+    async def update_article(self, aid, data, user_id=None):
         return None
 
-    async def delete_article(self, aid):
+    async def delete_article(self, aid, user_id=None):
         return False
 
 

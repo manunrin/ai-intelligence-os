@@ -2,22 +2,27 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from datetime import datetime, timezone
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..events.event import AuditAction, AuditLogEvent
 from ..repositories.user_repository import UserRepository
 from ..schemas.user import UserCreate, UserLogin, UserResponse
 from ..utils.auth import hash_password, verify_password
+
+logger = logging.getLogger(__name__)
 
 
 class UserService:
     """Business logic for user authentication."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, event_publisher=None) -> None:
         self._repo = UserRepository(session)
+        self._publisher = event_publisher
 
     async def register(self, data: UserCreate) -> UserResponse:
         """Register a new user. Raises ValueError if username or email exists."""
@@ -40,6 +45,7 @@ class UserService:
             created_at=now,
             updated_at=now,
         )
+        await self._publish_audit(AuditAction.CREATE, str(user.id))
         return self._to_response(user)
 
     async def authenticate(self, data: UserLogin) -> UserResponse | None:
@@ -54,6 +60,7 @@ class UserService:
 
         user.last_login_at = datetime.now(timezone.utc)
         await self._repo.session.flush()
+        await self._publish_audit(AuditAction.LOGIN, str(user.id))
         return self._to_response(user)
 
     async def get_user(self, user_id: str) -> UserResponse | None:
@@ -62,6 +69,20 @@ class UserService:
         if user is None:
             return None
         return self._to_response(user)
+
+    async def _publish_audit(self, action: AuditAction, resource_id: str) -> None:
+        if self._publisher is None:
+            return
+        try:
+            await self._publisher.publish(AuditLogEvent(
+                action=action,
+                resource_type="auth",
+                resource_id=uuid.UUID(resource_id),
+                user_id=uuid.UUID(resource_id),
+                metadata={"resource_id": resource_id},
+            ))
+        except Exception:
+            logger.error("Failed to publish audit event for %s auth %s", action.value, resource_id, exc_info=True)
 
     @staticmethod
     def _to_response(user: Any) -> UserResponse:

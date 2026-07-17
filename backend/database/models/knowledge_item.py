@@ -27,8 +27,12 @@ class KnowledgeItem(Base):
     external_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     language_data: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     learning_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     source = relationship("Source", foreign_keys=[source_id])
     article = relationship("Article", foreign_keys=[article_id])
     report = relationship("IntelligenceReport", foreign_keys=[report_id])
+    user = relationship("User", back_populates="knowledge_items")

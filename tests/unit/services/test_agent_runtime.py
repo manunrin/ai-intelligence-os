@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from datetime import datetime, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -16,11 +17,26 @@ from backend.services.agent_runtime_service import (
 )
 
 
+def _make_mock_session():
+    """Build a session mock with chainable execute() returning scalars().all()."""
+    result = MagicMock()
+    result.scalars = MagicMock(return_value=result)
+    result.all = MagicMock(return_value=[])
+    result.scalar_one_or_none = MagicMock(return_value=None)
+
+    class MockSession:
+        execute = AsyncMock(return_value=result)
+        add = AsyncMock()
+        commit = AsyncMock()
+        flush = AsyncMock()
+        close = AsyncMock()
+
+    return MockSession()
+
+
 @pytest.fixture()
 def mock_session():
-    session = AsyncMock()
-    session.commit = AsyncMock()
-    return session
+    return _make_mock_session()
 
 
 @pytest.fixture()
@@ -44,15 +60,19 @@ def mock_stage_repo(mock_session):
 
 @pytest.fixture()
 def service(mock_session, mock_repo, mock_stage_repo):
-    svc = AgentRuntimeService(mock_session)
-    svc._repo = mock_repo
-    svc._stage_repo = mock_stage_repo
-    return svc
+    sf = MagicMock()
+    sf.return_value = AsyncMock()
+    svc = AgentRuntimeService(mock_session, session_factory=sf)
+    with patch(
+        "backend.services.agent_runtime_service._make_repo",
+        return_value=(mock_repo, mock_stage_repo),
+    ):
+        yield svc
 
 
 class TestAgentRuntimeServiceSubmit:
     @pytest.mark.asyncio
-    async def test_submit_creates_run_record(self, service):
+    async def test_submit_creates_run_record(self, service, mock_session, mock_repo):
         """submit() creates an AgentRun record and returns it as dict."""
         run_id = uuid.uuid4()
         fake_run = MagicMock()
@@ -68,17 +88,21 @@ class TestAgentRuntimeServiceSubmit:
         fake_run.finished_at = None
         fake_run.duration_ms = None
         fake_run.user_id = uuid.uuid4()
-        service._repo.create = AsyncMock(return_value=fake_run)
 
-        result = await service.submit(
-            agent_type="intelligence",
-            input_payload={"topic": "test"},
-            user_id=fake_run.user_id,
-        )
+        mock_repo.create = AsyncMock(return_value=fake_run)
+
+        # Patch create_task so submit doesn't actually start bg execution
+        with patch.object(asyncio, "create_task"):
+            result = await service.submit(
+                agent_type="intelligence",
+                input_payload={"topic": "test"},
+                user_id=fake_run.user_id,
+            )
+
         assert result["status"] == "running"
         assert result["stage"] == "initializing"
         assert result["input_payload"]["topic"] == "test"
-        service._repo.create.assert_called_once()
+        mock_repo.create.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_submit_invalid_agent_type(self, service):
@@ -98,13 +122,13 @@ class TestAgentRuntimeServiceSubmit:
 
 class TestAgentRuntimeServiceGetRun:
     @pytest.mark.asyncio
-    async def test_get_run_returns_none_for_missing(self, service):
-        service._repo.get_by_id.return_value = None
+    async def test_get_run_returns_none_for_missing(self, service, mock_repo):
+        mock_repo.get_by_id.return_value = None
         result = await service.get_run(str(uuid.uuid4()))
         assert result is None
 
     @pytest.mark.asyncio
-    async def test_get_run_returns_dict_with_stages(self, service):
+    async def test_get_run_returns_dict_with_stages(self, service, mock_repo, mock_stage_repo):
         run_id = uuid.uuid4()
         run_obj = MagicMock()
         run_obj.id = run_id
@@ -119,7 +143,8 @@ class TestAgentRuntimeServiceGetRun:
         run_obj.finished_at = None
         run_obj.duration_ms = None
         run_obj.user_id = uuid.uuid4()
-        service._repo.get_by_id.return_value = run_obj
+        mock_repo.get_by_id.return_value = run_obj
+        mock_stage_repo.get_by_run_id.return_value = []
 
         result = await service.get_run(str(run_id))
         assert result is not None
@@ -130,23 +155,25 @@ class TestAgentRuntimeServiceGetRun:
 
 class TestAgentRuntimeServiceCancel:
     @pytest.mark.asyncio
-    async def test_cancel_nonexistent_run(self, service):
-        service._repo.get_by_id.return_value = None
+    async def test_cancel_nonexistent_run(self, service, mock_repo):
+        mock_repo.get_by_id.return_value = None
         with pytest.raises(AgentRunNotFoundError):
             await service.cancel_run(str(uuid.uuid4()), user_id=uuid.uuid4())
 
     @pytest.mark.asyncio
-    async def test_cancel_running_run(self, service):
+    async def test_cancel_running_run(self, service, mock_repo, mock_session):
         run_id = uuid.uuid4()
         run_obj = MagicMock()
         run_obj.status = "running"
-        service._repo.get_by_id.return_value = run_obj
-        service._repo.update = AsyncMock()
-        service._run_tasks[run_id] = None  # No running task
+        mock_repo.get_by_id.return_value = run_obj
+        mock_repo.update = AsyncMock()
+        service._run_tasks[run_id] = None
 
         result = await service.cancel_run(str(run_id), user_id=uuid.uuid4())
         assert result["cancelled"] is True
-        assert service._repo.update.call_count >= 1
+        assert mock_repo.update.call_count >= 1
+        # Verify commit was called on the request session
+        mock_session.commit.assert_called()
 
 
 class TestRunToDict:
@@ -183,7 +210,7 @@ class TestAvailablePipelines:
 
 class TestPersistStages:
     @pytest.mark.asyncio
-    async def test_persist_stages_from_events(self, service):
+    async def test_persist_stages_from_events(self, service, mock_stage_repo, mock_session):
         from backend.workflows.graph.callbacks import StageEvent
 
         run_id = uuid.uuid4()
@@ -194,12 +221,17 @@ class TestPersistStages:
             StageEvent(run_id=run_id, node_name="analyst", phase="error", error_message="fail"),
         ]
 
-        await service._persist_stages(run_id, events)
+        stage_repo = MagicMock()
+        stage_repo.create_stage = AsyncMock()
+        stage_repo.update_stage = AsyncMock()
+        stage_repo.session = mock_session
+
+        await service._persist_stages(stage_repo, run_id, events)
 
         # Each unique stage triggers one create_stage call (research + analyst = 2)
-        assert service._stage_repo.create_stage.call_count == 2
+        assert stage_repo.create_stage.call_count == 2
         # update_stage is called for completed/failed stages (end + error = 2)
-        assert service._stage_repo.update_stage.call_count == 2
+        assert stage_repo.update_stage.call_count == 2
 
 
 class TestEventAbstraction:

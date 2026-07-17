@@ -27,3 +27,8 @@ class ArticleRepository(BaseRepository[Article]):
         stmt = select(Article).where(Article.source_id == source_id)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def list_by_user(self, user_id: Any, offset: int = 0, limit: int = 20) -> list[Article]:
+        stmt = select(Article).where(Article.user_id == user_id).offset(offset).limit(limit)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())

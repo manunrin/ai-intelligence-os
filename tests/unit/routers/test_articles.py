@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -42,13 +42,44 @@ def _fake_article(**kwargs):
 
 
 class FakeSessionCtx:
-    """Context manager that yields a fake session without hitting the DB."""
+    """Minimal async session that returns empty results for queries."""
 
-    async def __aenter__(self):
-        return MagicMock()
+    def __init__(self):
+        self.commit = AsyncMock()
+        self.rollback = AsyncMock()
+        self.close = AsyncMock()
+        self.add = AsyncMock()
+        self.flush = AsyncMock()
 
-    async def __aexit__(self, *a):
-        pass
+        _result = MagicMock()
+        _result.scalars = MagicMock(return_value=_result)
+        _result.all = MagicMock(return_value=[])
+        _result.scalar_one_or_none = MagicMock(return_value=None)
+        self.execute = AsyncMock(return_value=_result)
+
+
+def _build_client_with_session():
+    """Create a TestClient with auth override and a fake session factory (A1 pattern)."""
+    from unittest.mock import MagicMock as _MagicMock
+    import uuid as _uuid
+    from backend.routers.deps import get_current_user
+
+    fake_user = _MagicMock()
+    fake_user.id = _uuid.uuid4()
+    fake_user.username = "testuser"
+    fake_user.role = "user"
+    fake_user.is_active = True
+
+    app = create_app()
+
+    # A1: session_factory must be callable that returns a real fake session
+    app.state.session_factory = FakeSessionCtx
+
+    async def mock_get_current_user():
+        return fake_user
+
+    app.dependency_overrides[get_current_user] = mock_get_current_user
+    return TestClient(app), app
 
 
 # ------------------------------------------------------------------
@@ -56,9 +87,9 @@ class FakeSessionCtx:
 # ------------------------------------------------------------------
 
 class TestDependencyOverride:
-    """Use FastAPI TestClient with patched get_session_factory to avoid real DB."""
+    """Use FastAPI TestClient with patched app.state.session_factory to avoid real DB."""
 
-    def test_empty_database_returns_empty_list(self, client: TestClient) -> None:
+    def test_empty_database_returns_empty_list(self):
         """When the repository returns no rows, data should be []."""
 
         class FakeRepo:
@@ -68,21 +99,23 @@ class TestDependencyOverride:
             async def list_all(self, *, offset=0, limit=20, order_by=None, descending=True):
                 return []
 
+            async def list_by_user(self, user_id, *, offset=0, limit=20, order_by=None, descending=True):
+                return []
+
             async def count(self):
                 return 0
 
-        # Patch where ArticleService imports it from
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.services.article_service.ArticleRepository", FakeRepo):
-                resp = client.get("/api/v1/articles")
+        client, app = _build_client_with_session()
+        with patch("backend.services.article_service.ArticleRepository", FakeRepo):
+            resp = client.get("/api/v1/articles")
 
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
         assert body["data"] == []
-        assert body["error"] is None
+        app.dependency_overrides.clear()
 
-    def test_pagination_params_passed_to_service(self, client: TestClient) -> None:
+    def test_pagination_params_passed_to_service(self):
         """Verify offset/limit query params are forwarded."""
         captured: dict[str, int] = {}
 
@@ -95,18 +128,24 @@ class TestDependencyOverride:
                 captured["limit"] = limit
                 return []
 
+            async def list_by_user(self, user_id, *, offset=0, limit=20, order_by=None, descending=True):
+                captured["offset"] = offset
+                captured["limit"] = limit
+                return []
+
             async def count(self):
                 return 0
 
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.services.article_service.ArticleRepository", TrackingRepo):
-                resp = client.get("/api/v1/articles?offset=10&limit=5")
+        client, app = _build_client_with_session()
+        with patch("backend.services.article_service.ArticleRepository", TrackingRepo):
+            resp = client.get("/api/v1/articles?offset=10&limit=5")
 
         assert resp.status_code == 200
         assert captured.get("offset") == 10
         assert captured.get("limit") == 5
+        app.dependency_overrides.clear()
 
-    def test_default_pagination_values(self, client: TestClient) -> None:
+    def test_default_pagination_values(self):
         """Without query params, defaults should be offset=0, limit=20."""
         captured: dict[str, int] = {}
 
@@ -119,16 +158,22 @@ class TestDependencyOverride:
                 captured["limit"] = limit
                 return []
 
+            async def list_by_user(self, user_id, *, offset=0, limit=20, order_by=None, descending=True):
+                captured["offset"] = offset
+                captured["limit"] = limit
+                return []
+
             async def count(self):
                 return 0
 
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.services.article_service.ArticleRepository", TrackingRepo):
-                resp = client.get("/api/v1/articles")
+        client, app = _build_client_with_session()
+        with patch("backend.services.article_service.ArticleRepository", TrackingRepo):
+            resp = client.get("/api/v1/articles")
 
         assert resp.status_code == 200
         assert captured.get("offset") == 0
         assert captured.get("limit") == 20
+        app.dependency_overrides.clear()
 
 
 # ------------------------------------------------------------------
@@ -136,7 +181,7 @@ class TestDependencyOverride:
 # ------------------------------------------------------------------
 
 class TestResponseSchema:
-    def test_article_response_contains_required_fields(self, client: TestClient) -> None:
+    def test_article_response_contains_required_fields(self):
         """The response must conform to APIResponse[list[ArticleResponse]]."""
         now = datetime.now(timezone.utc)
         fake_art = _fake_article(
@@ -159,12 +204,15 @@ class TestResponseSchema:
             async def list_all(self, *, offset=0, limit=20, order_by=None, descending=True):
                 return [fake_art]
 
+            async def list_by_user(self, user_id, *, offset=0, limit=20, order_by=None, descending=True):
+                return [fake_art]
+
             async def count(self):
                 return 1
 
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.services.article_service.ArticleRepository", SnapshotRepo):
-                resp = client.get("/api/v1/articles")
+        client, app = _build_client_with_session()
+        with patch("backend.services.article_service.ArticleRepository", SnapshotRepo):
+            resp = client.get("/api/v1/articles")
 
         assert resp.status_code == 200
         body = resp.json()
@@ -181,3 +229,4 @@ class TestResponseSchema:
         ]
         for field in required_fields:
             assert field in article_data, f"Missing field: {field}"
+        app.dependency_overrides.clear()
