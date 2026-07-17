@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useAuth, type User } from "@/lib/auth-context";
 import { api, unwrap } from "@/lib/api";
 import type { Article, AgentRun, Task, KnowledgeItem, IntelligenceReport } from "@/types";
 import { Card } from "@/components/ui/Card";
@@ -21,6 +23,32 @@ const tabs: { key: TabKey; label: string }[] = [
 ];
 
 export default function Home() {
+  const router = useRouter();
+  const { user, isAuthenticated, isLoading } = useAuth();
+
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.push("/login");
+    }
+  }, [isAuthenticated, isLoading, router]);
+
+  if (isLoading || !isAuthenticated) {
+    return (
+      <main className="min-h-screen bg-slate-50 flex items-center justify-center dark:bg-slate-950">
+        <div className="text-center space-y-3">
+          <p className="text-sm text-slate-500 dark:text-slate-400">Loading...</p>
+        </div>
+      </main>
+    );
+  }
+
+  return <DashboardContent user={user!} />;
+}
+
+function DashboardContent({ user }: { user: User }) {
+  const { logout } = useAuth();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [articles, setArticles] = useState<Article[]>([]);
   const [knowledgeItems, setKnowledgeItems] = useState<KnowledgeItem[]>([]);
@@ -46,7 +74,6 @@ export default function Home() {
         setAgentRuns(agents);
         setReports(reports);
       } catch (err) {
-        // Backend not running yet — show empty state
         if (err instanceof Error && err.message.includes("fetch")) {
           setError("Backend not available. Start with `make start`.");
         } else {
@@ -89,9 +116,17 @@ export default function Home() {
               Monitor your autonomous intelligence pipeline
             </p>
           </div>
-          <Badge variant={error ? "danger" : "success"}>
-            {error ? "Offline" : "Connected"}
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Badge variant={error ? "danger" : "success"}>
+              {error ? "Offline" : "Connected"}
+            </Badge>
+            <span className="text-sm text-slate-600 dark:text-slate-300">
+              {String(user.username ?? "")}
+            </span>
+            <Button variant="ghost" size="sm" onClick={() => { logout(); router.push("/login"); }}>
+              Logout
+            </Button>
+          </div>
         </div>
 
         {/* Stats Row */}
