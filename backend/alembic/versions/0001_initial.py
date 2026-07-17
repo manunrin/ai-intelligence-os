@@ -53,6 +53,61 @@ def upgrade() -> None:
     op.create_index(op.f("idx_articles_language"), "articles", ["language"], unique=False)
     op.create_index(op.f("idx_articles_published"), "articles", ["published_at"], unique=False, postgresql_ops={"published_at": "DESC"})
 
+    # --- agents ---
+    op.create_table(
+        "agents",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("name", sa.String(64), nullable=False),
+        sa.Column("display_name", sa.String(128), nullable=False),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.Column("graph_def", sa.JSON(), nullable=False),
+        sa.Column("version", sa.String(16), server_default=sa.text("'1.0.0'")),
+        sa.Column("enabled", sa.Boolean(), server_default=sa.text("true")),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.PrimaryKeyConstraint("id", name=op.f("agents_pkey")),
+        sa.UniqueConstraint("name", name=op.f("agents_name_key")),
+    )
+    op.create_index(op.f("idx_agents_enabled"), "agents", ["enabled"], unique=False, postgresql_where=sa.text("enabled = true"))
+
+    # --- workflows ---
+    op.create_table(
+        "workflows",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("name", sa.String(128), nullable=False),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.Column("schedule_cron", sa.String(64), nullable=True),
+        sa.Column("graph_def", sa.JSON(), nullable=False),
+        sa.Column("version", sa.String(16), server_default=sa.text("'1.0.0'")),
+        sa.Column("enabled", sa.Boolean(), server_default=sa.text("true")),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.PrimaryKeyConstraint("id", name=op.f("workflows_pkey")),
+    )
+    op.create_index(op.f("idx_workflows_enabled"), "workflows", ["enabled"], unique=False, postgresql_where=sa.text("enabled = true"))
+
+    # --- agent_runs (before intelligence_reports/tasks which reference it) ---
+    op.create_table(
+        "agent_runs",
+        sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("agent_id", sa.Uuid(), nullable=False),
+        sa.Column("workflow_id", sa.Uuid(), nullable=True),
+        sa.Column("status", sa.String(16), server_default=sa.text("'running'")),
+        sa.Column("input_payload", sa.JSON(), server_default=sa.text("'{}'::jsonb")),
+        sa.Column("output_payload", sa.JSON(), nullable=True),
+        sa.Column("error_message", sa.Text(), nullable=True),
+        sa.Column("started_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("duration_ms", sa.BigInteger(), nullable=True),
+        sa.PrimaryKeyConstraint("id", name=op.f("agent_runs_pkey")),
+        sa.ForeignKeyConstraint(["agent_id"], ["agents.id"], name=op.f("agent_runs_agent_id_fkey")),
+        sa.ForeignKeyConstraint(["workflow_id"], ["workflows.id"], name=op.f("agent_runs_workflow_id_fkey")),
+    )
+    op.create_index(op.f("idx_runs_agent"), "agent_runs", ["agent_id"], unique=False)
+    op.create_index(op.f("idx_runs_workflow"), "agent_runs", ["workflow_id"], unique=False)
+    op.create_index(op.f("idx_runs_status"), "agent_runs", ["status"], unique=False)
+    op.create_index(op.f("idx_runs_started"), "agent_runs", ["started_at"], unique=False, postgresql_ops={"started_at": "DESC"})
+
     # --- intelligence_reports ---
     op.create_table(
         "intelligence_reports",
@@ -123,61 +178,6 @@ def upgrade() -> None:
     op.create_index(op.f("idx_tasks_priority"), "tasks", ["priority"], unique=False)
     op.create_index(op.f("idx_tasks_agent_run"), "tasks", ["agent_run_id"], unique=False)
 
-    # --- agents ---
-    op.create_table(
-        "agents",
-        sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("name", sa.String(64), nullable=False),
-        sa.Column("display_name", sa.String(128), nullable=False),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("graph_def", sa.JSON(), nullable=False),
-        sa.Column("version", sa.String(16), server_default=sa.text("'1.0.0'")),
-        sa.Column("enabled", sa.Boolean(), server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint("id", name=op.f("agents_pkey")),
-        sa.UniqueConstraint("name", name=op.f("agents_name_key")),
-    )
-    op.create_index(op.f("idx_agents_enabled"), "agents", ["enabled"], unique=False, postgresql_where=sa.text("enabled = true"))
-
-    # --- agent_runs ---
-    op.create_table(
-        "agent_runs",
-        sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("agent_id", sa.Uuid(), nullable=False),
-        sa.Column("workflow_id", sa.Uuid(), nullable=True),
-        sa.Column("status", sa.String(16), server_default=sa.text("'running'")),
-        sa.Column("input_payload", sa.JSON(), server_default=sa.text("'{}'::jsonb")),
-        sa.Column("output_payload", sa.JSON(), nullable=True),
-        sa.Column("error_message", sa.Text(), nullable=True),
-        sa.Column("started_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("finished_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("duration_ms", sa.BigInteger(), nullable=True),
-        sa.PrimaryKeyConstraint("id", name=op.f("agent_runs_pkey")),
-        sa.ForeignKeyConstraint(["agent_id"], ["agents.id"], name=op.f("agent_runs_agent_id_fkey")),
-        sa.ForeignKeyConstraint(["workflow_id"], ["workflows.id"], name=op.f("agent_runs_workflow_id_fkey")),
-    )
-    op.create_index(op.f("idx_runs_agent"), "agent_runs", ["agent_id"], unique=False)
-    op.create_index(op.f("idx_runs_workflow"), "agent_runs", ["workflow_id"], unique=False)
-    op.create_index(op.f("idx_runs_status"), "agent_runs", ["status"], unique=False)
-    op.create_index(op.f("idx_runs_started"), "agent_runs", ["started_at"], unique=False, postgresql_ops={"started_at": "DESC"})
-
-    # --- workflows ---
-    op.create_table(
-        "workflows",
-        sa.Column("id", sa.Uuid(), nullable=False),
-        sa.Column("name", sa.String(128), nullable=False),
-        sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("schedule_cron", sa.String(64), nullable=True),
-        sa.Column("graph_def", sa.JSON(), nullable=False),
-        sa.Column("version", sa.String(16), server_default=sa.text("'1.0.0'")),
-        sa.Column("enabled", sa.Boolean(), server_default=sa.text("true")),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.PrimaryKeyConstraint("id", name=op.f("workflows_pkey")),
-    )
-    op.create_index(op.f("idx_workflows_enabled"), "workflows", ["enabled"], unique=False, postgresql_where=sa.text("enabled = true"))
-
     # --- user_preferences ---
     op.create_table(
         "user_preferences",
@@ -195,15 +195,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index(op.f("idx_prefs_user_key"), table_name="user_preferences")
     op.drop_table("user_preferences")
-    op.drop_index(op.f("idx_workflows_enabled"), table_name="workflows")
-    op.drop_table("workflows")
-    op.drop_index(op.f("idx_runs_started"), table_name="agent_runs")
-    op.drop_index(op.f("idx_runs_status"), table_name="agent_runs")
-    op.drop_index(op.f("idx_runs_workflow"), table_name="agent_runs")
-    op.drop_index(op.f("idx_runs_agent"), table_name="agent_runs")
-    op.drop_table("agent_runs")
-    op.drop_index(op.f("idx_agents_enabled"), table_name="agents")
-    op.drop_table("agents")
     op.drop_index(op.f("idx_tasks_agent_run"), table_name="tasks")
     op.drop_index(op.f("idx_tasks_priority"), table_name="tasks")
     op.drop_index(op.f("idx_tasks_status"), table_name="tasks")
@@ -216,6 +207,15 @@ def downgrade() -> None:
     op.drop_index(op.f("idx_reports_importance"), table_name="intelligence_reports")
     op.drop_index(op.f("idx_reports_category"), table_name="intelligence_reports")
     op.drop_table("intelligence_reports")
+    op.drop_index(op.f("idx_runs_started"), table_name="agent_runs")
+    op.drop_index(op.f("idx_runs_status"), table_name="agent_runs")
+    op.drop_index(op.f("idx_runs_workflow"), table_name="agent_runs")
+    op.drop_index(op.f("idx_runs_agent"), table_name="agent_runs")
+    op.drop_table("agent_runs")
+    op.drop_index(op.f("idx_agents_enabled"), table_name="agents")
+    op.drop_table("agents")
+    op.drop_index(op.f("idx_workflows_enabled"), table_name="workflows")
+    op.drop_table("workflows")
     op.drop_index(op.f("idx_articles_published"), table_name="articles")
     op.drop_index(op.f("idx_articles_language"), table_name="articles")
     op.drop_index(op.f("idx_articles_status"), table_name="articles")

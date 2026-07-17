@@ -26,38 +26,42 @@ class ProtectedTrackingService:
     def __init__(self, db):
         self._db = db
 
-    async def create_article(self, data):
+    async def create_article(self, data, user_id):
         return {
             "id": str(uuid.uuid4()), "title": "Created", "source": "rss",
             "status": "raw", "language": "en", "tags": [], "summary": None,
             "content": None, "url": None,
             "fetched_at": datetime.now(timezone.utc).isoformat(),
             "published_at": None,
+            "user_id": str(user_id),
         }
 
-    async def create_task(self, data):
+    async def create_task(self, data, user_id):
         return {
             "id": str(uuid.uuid4()), "title": "New Task", "description": None,
             "priority": "medium", "status": "pending", "dependency": [],
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "user_id": str(user_id),
         }
 
-    async def create_knowledge_item(self, data):
+    async def create_knowledge_item(self, data, user_id):
         return {
             "id": str(uuid.uuid4()), "title": "New Item", "content": "Data",
             "kind": "note", "article_id": None, "tags": ["test"],
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "user_id": str(user_id),
         }
 
-    async def create_report(self, data):
+    async def create_report(self, data, user_id):
         return {
             "id": str(uuid.uuid4()), "topic": "New Report",
             "research_result": None, "analysis_result": None,
             "translation_result": None, "knowledge_items": [], "tasks": [],
             "created_at": datetime.now(timezone.utc).isoformat(),
+            "user_id": str(user_id),
         }
 
-    async def run_agent(self, agent_id, input_payload=None):
+    async def run_agent(self, agent_id, input_payload=None, user_id=None):
         return {
             "id": str(uuid.uuid4()), "agent_id": str(uuid.uuid4()),
             "workflow_id": None, "status": "running",
@@ -65,6 +69,20 @@ class ProtectedTrackingService:
             "output_payload": None, "error_message": None,
             "started_at": datetime.now(timezone.utc).isoformat(),
             "finished_at": None,
+            "user_id": str(user_id) if user_id else None,
+        }
+
+    async def submit(self, agent_type, input_payload, user_id, **kwargs):
+        return {
+            "id": str(uuid.uuid4()), "agent_id": str(uuid.uuid4()),
+            "workflow_id": None, "status": "running",
+            "stage": "initializing",
+            "input_payload": input_payload or {},
+            "output_payload": None, "error_message": None,
+            "started_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": None,
+            "duration_ms": None,
+            "user_id": str(user_id) if user_id else None,
         }
 
 
@@ -195,7 +213,7 @@ class TestProtectedEndpointsWithValidToken:
     def test_agents_run_with_token(self):
         client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.agents.AgentService", ProtectedTrackingService):
+            with patch("backend.routers.agents.AgentRuntimeService", ProtectedTrackingService):
                 resp = client.post(f"/api/v1/agents/{uuid.uuid4()}/run")
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "running"

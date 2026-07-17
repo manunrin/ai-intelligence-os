@@ -10,6 +10,8 @@ from .agent_run import AgentRun
 from .workflow import Workflow
 from .user_preference import UserPreference
 from .user import User
+from .audit_log import AuditLog
+from .agent_stage_progress import AgentStageProgress
 
 __all__ = [
     "Source",
@@ -19,7 +21,9 @@ __all__ = [
     "Task",
     "Agent",
     "AgentRun",
+    "AgentStageProgress",
     "Workflow",
     "UserPreference",
     "User",
+    "AuditLog",
 ]

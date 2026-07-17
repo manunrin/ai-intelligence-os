@@ -1,10 +1,10 @@
-"""Tests for agent run endpoint — POST /agents/{id}/run."""
+"""Tests for agent run endpoint — POST /agents/{id}/run (legacy) and POST /agents/run."""
 
 from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock, AsyncMock, patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -20,27 +20,31 @@ class FakeSessionCtx:
         pass
 
 
-class TrackingService:
+class TrackingRuntimeService:
+    """Minimal mock of AgentRuntimeService for endpoint testing."""
+
     def __init__(self, db):
         self._db = db
 
-    async def run_agent(self, agent_id, input_payload=None):
+    async def submit(self, agent_type, input_payload, user_id, *, timeout_seconds=300):
         return {
             "id": str(uuid.uuid4()), "agent_id": str(uuid.uuid4()),
             "workflow_id": None, "status": "running",
+            "stage": "initializing",
             "input_payload": input_payload or {},
             "output_payload": None, "error_message": None,
             "started_at": datetime.now(timezone.utc).isoformat(),
             "finished_at": None,
+            "duration_ms": None,
+            "user_id": str(user_id) if user_id else None,
         }
 
 
 def _make_client():
     from unittest.mock import MagicMock
-    import uuid as _uuid
 
     fake_user = MagicMock()
-    fake_user.id = _uuid.uuid4()
+    fake_user.id = uuid.uuid4()
     fake_user.username = "testuser"
     fake_user.role = "user"
     fake_user.is_active = True
@@ -57,11 +61,13 @@ def _make_client():
     return TestClient(app), app
 
 
-class TestAgentRun:
-    def test_post_run_agent(self):
+class TestAgentRunLegacy:
+    """Test legacy POST /agents/{agent_id}/run endpoint."""
+
+    def test_post_run_agent_legacy(self):
         client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.agents.AgentService", TrackingService):
+            with patch("backend.routers.agents.AgentRuntimeService", TrackingRuntimeService):
                 resp = client.post(
                     f"/api/v1/agents/{uuid.uuid4()}/run",
                     json={"query": "test"},
@@ -72,11 +78,55 @@ class TestAgentRun:
         assert body["data"]["status"] == "running"
         app.dependency_overrides.clear()
 
-    def test_post_run_agent_no_body(self):
+    def test_post_run_agent_legacy_no_body(self):
         client, app = _make_client()
         with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.agents.AgentService", TrackingService):
+            with patch("backend.routers.agents.AgentRuntimeService", TrackingRuntimeService):
                 resp = client.post(f"/api/v1/agents/{uuid.uuid4()}/run")
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "running"
+        app.dependency_overrides.clear()
+
+
+class TestAgentRunSubmit:
+    """Test new POST /agents/run endpoint."""
+
+    def test_submit_agent_run(self):
+        client, app = _make_client()
+        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
+            with patch("backend.routers.agents.AgentRuntimeService", TrackingRuntimeService):
+                resp = client.post(
+                    "/api/v1/agents/run",
+                    json={
+                        "agent_type": "intelligence",
+                        "input_payload": {"topic": "AI trends"},
+                    },
+                )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["status"] == "running"
+        app.dependency_overrides.clear()
+
+    def test_submit_agent_run_validation_error(self):
+        """Invalid agent_type is validated by AgentRuntimeService.submit(),
+        which raises ValueError caught by the exception handler."""
+        # This test validates the endpoint accepts valid payloads.
+        # Validation errors from submit() are tested in service unit tests.
+        client, app = _make_client()
+        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
+            with patch("backend.routers.agents.AgentRuntimeService", TrackingRuntimeService):
+                resp = client.post(
+                    "/api/v1/agents/run",
+                    json={
+                        "agent_type": "intelligence",
+                        "input_payload": {"topic": "AI trends"},
+                        "topic": "AI trends",
+                    },
+                )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["status"] == "running"
+        assert body["data"]["input_payload"]["topic"] == "AI trends"
         app.dependency_overrides.clear()

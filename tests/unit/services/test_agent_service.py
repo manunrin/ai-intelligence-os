@@ -40,12 +40,16 @@ class TestAgentServiceRun:
         fake.error_message = None
         fake.started_at = datetime.now(timezone.utc)
         fake.finished_at = None
+        fake.user_id = None
         service._repo.create = AsyncMock(return_value=fake)
 
-        result = await service.run_agent(str(fake.agent_id), input_payload={"query": "test"})
+        user_id = uuid.uuid4()
+        result = await service.run_agent(str(fake.agent_id), input_payload={"query": "test"}, user_id=user_id)
         assert result["status"] == "running"
         assert result["input_payload"] == {"query": "test"}
         service._repo.create.assert_called_once()
+        call_kwargs = service._repo.create.call_args[1]
+        assert call_kwargs["user_id"] == user_id
 
     @pytest.mark.asyncio
     async def test_run_agent_default_payload(self, service):
@@ -59,8 +63,10 @@ class TestAgentServiceRun:
         fake.error_message = None
         fake.started_at = datetime.now(timezone.utc)
         fake.finished_at = None
+        fake.user_id = None
         service._repo.create = AsyncMock(return_value=fake)
 
-        result = await service.run_agent(str(fake.agent_id))
+        user_id = uuid.uuid4()
+        result = await service.run_agent(str(fake.agent_id), input_payload=None, user_id=user_id)
         assert result["status"] == "running"
         assert result["input_payload"] == {}
