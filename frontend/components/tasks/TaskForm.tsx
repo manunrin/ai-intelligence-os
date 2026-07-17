@@ -4,6 +4,8 @@
 
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import type { Task } from "@/types";
 import { api } from "@/lib/api";
@@ -14,6 +16,21 @@ interface TaskFormBodyProps {
   onError: (err: string | null) => void;
   onSubmit: () => void;
 }
+
+const priorityOptions = [
+  { value: "low" },
+  { value: "medium" },
+  { value: "high" },
+  { value: "urgent" },
+];
+
+const statusOptions = [
+  { value: "pending" },
+  { value: "todo" },
+  { value: "in_progress" },
+  { value: "done" },
+  { value: "blocked" },
+];
 
 export function TaskFormBody({ initialData, error, onError, onSubmit }: TaskFormBodyProps) {
   const isEdit = !!initialData;
@@ -62,23 +79,10 @@ export function TaskFormBody({ initialData, error, onError, onSubmit }: TaskForm
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task title" required />
-      <textarea
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
-        rows={3} placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)}
-      />
+      <Textarea rows={3} placeholder="Description" value={description} onChange={(e) => setDescription(e.target.value)} />
       <div className="grid grid-cols-2 gap-4">
-        <select
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-          value={priority} onChange={(e) => setPriority(e.target.value)}
-        >
-          <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option>
-        </select>
-        <select
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-          value={status} onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="pending">Pending</option><option value="todo">Todo</option><option value="in_progress">In Progress</option><option value="done">Done</option><option value="blocked">Blocked</option>
-        </select>
+        <Select label="Priority" value={priority} onChange={(e) => setPriority(e.target.value)} options={priorityOptions} />
+        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} options={statusOptions} />
       </div>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={() => onError(null)}>Cancel</Button>

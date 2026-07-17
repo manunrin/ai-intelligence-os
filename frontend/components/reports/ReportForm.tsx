@@ -4,6 +4,7 @@
 
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import { api } from "@/lib/api";
 
@@ -50,10 +51,7 @@ export function ReportFormBody({ error, onError, onSubmit }: ReportFormBodyProps
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Report title" required />
-      <textarea
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
-        rows={4} placeholder="Report body" value={body} onChange={(e) => setBody(e.target.value)} required
-      />
+      <Textarea rows={4} placeholder="Report body" value={body} onChange={(e) => setBody(e.target.value)} required />
       <div className="grid grid-cols-2 gap-4">
         <Input label="Category" value={category} onChange={(e) => setCategory(e.target.value)} placeholder="e.g., market-analysis" />
         <Input label="Importance Score (0-10)" value={importanceScore} onChange={(e) => setImportanceScore(e.target.value)} placeholder="7" type="number" min={0} max={10} />

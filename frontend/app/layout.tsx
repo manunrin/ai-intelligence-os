@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { AuthProvider } from "@/lib/auth-context";
-import { ToastProvider } from "@/lib/toast";
+import { Providers } from "@/lib/providers";
 
 export const metadata: Metadata = {
   title: "AI Intelligence OS",
@@ -15,9 +14,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background antialiased">
-        <AuthProvider>
-          <ToastProvider>{children}</ToastProvider>
-        </AuthProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

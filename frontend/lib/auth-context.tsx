@@ -9,7 +9,8 @@ import {
   useState,
 } from "react";
 import { getStoredToken, getStoredUser, storeToken, storeUser, clearAuth } from "@/lib/auth-storage";
-import { setAuthToken } from "@/lib/api";
+import { setAuthToken, unwrapSingle } from "@/lib/api";
+import { api } from "@/lib/api";
 
 export interface User {
   id: string;
@@ -76,20 +77,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshUser = useCallback(async () => {
     if (!token) return;
     try {
-      const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-      const res = await fetch(`${API_BASE}/api/v1/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) {
-        logout();
-        return;
-      }
-      const json = await res.json();
-      const userData = json.data as User;
+      const res = await api.get<unknown>("/api/v1/auth/me");
+      const userData = await unwrapSingle<User>(res);
       setUser(userData);
       storeUser(userData);
     } catch {
-      // Network error — keep existing state
+      logout();
     }
   }, [token, logout]);
 

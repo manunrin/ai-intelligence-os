@@ -4,6 +4,8 @@
 
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import type { KnowledgeItem } from "@/types";
 import { api } from "@/lib/api";
@@ -14,6 +16,13 @@ interface KnowledgeFormBodyProps {
   onError: (err: string | null) => void;
   onSubmit: () => void;
 }
+
+const kindOptions = [
+  { value: "article" },
+  { value: "research" },
+  { value: "analysis" },
+  { value: "translation" },
+];
 
 export function KnowledgeFormBody({ initialData, error, onError, onSubmit }: KnowledgeFormBodyProps) {
   const isEdit = !!initialData;
@@ -63,17 +72,9 @@ export function KnowledgeFormBody({ initialData, error, onError, onSubmit }: Kno
     <form onSubmit={handleSubmit} className="space-y-4">
       {error && <p className="text-sm text-red-600 dark:text-red-400">{error}</p>}
       <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Knowledge title" required />
-      <textarea
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
-        rows={4} placeholder="Content" value={content} onChange={(e) => setContent(e.target.value)} required
-      />
+      <Textarea rows={4} placeholder="Content" value={content} onChange={(e) => setContent(e.target.value)} required />
       <div className="grid grid-cols-2 gap-4">
-        <select
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-          value={kind} onChange={(e) => setKind(e.target.value)}
-        >
-          <option value="article">Article</option><option value="research">Research</option><option value="analysis">Analysis</option><option value="translation">Translation</option>
-        </select>
+        <Select label="Type" value={kind} onChange={(e) => setKind(e.target.value)} options={kindOptions} />
         <Input label="Tags (comma-separated)" value={tagsStr} onChange={(e) => setTagsStr(e.target.value)} placeholder="tag1, tag2" />
       </div>
       <div className="flex justify-end gap-2">

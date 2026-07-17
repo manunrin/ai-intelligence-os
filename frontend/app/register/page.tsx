@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/lib/auth-context";
+import { api, setAuthToken, unwrapSingle } from "@/lib/api";
+import type { User } from "@/lib/auth-context";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -35,51 +37,18 @@ export default function RegisterPage() {
       setLoading(true);
 
       try {
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+        // Register
+        await api.post<unknown>("/api/v1/auth/register", { username, email, password });
 
-        // Register the user
-        const regRes = await fetch(`${API_BASE}/api/v1/auth/register`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, email, password }),
-        });
-
-        if (!regRes.ok) {
-          let msg = "Registration failed";
-          try {
-            const body = await regRes.json();
-            msg = body.error || msg;
-          } catch {
-            // ignore
-          }
-          throw new Error(msg);
-        }
-
-        // Auto-login after registration
-        const loginRes = await fetch(`${API_BASE}/api/v1/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password }),
-        });
-
-        if (!loginRes.ok) {
-          throw new Error("Registration succeeded but login failed. Please sign in manually.");
-        }
-
-        const json = await loginRes.json();
-        const { access_token, token_type } = json.data;
+        // Auto-login
+        const loginRes = await api.post<unknown>("/api/v1/auth/login", { username, password });
+        const { access_token } = await unwrapSingle<{ access_token: string; token_type: string }>(loginRes);
+        setAuthToken(access_token);
 
         // Fetch user profile
-        const meRes = await fetch(`${API_BASE}/api/v1/auth/me`, {
-          headers: { Authorization: `${token_type} ${access_token}` },
-        });
-
-        if (!meRes.ok) {
-          throw new Error("Failed to fetch user profile");
-        }
-
-        const meJson = await meRes.json();
-        login(access_token, meJson.data);
+        const meRes = await api.get<unknown>("/api/v1/auth/me");
+        const userData = await unwrapSingle<User>(meRes);
+        login(access_token, userData);
         router.push("/");
       } catch (err) {
         setError(err instanceof Error ? err.message : "Registration failed");

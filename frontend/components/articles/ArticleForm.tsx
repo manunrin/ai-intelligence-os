@@ -4,6 +4,8 @@
 
 import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/Input";
+import { Select } from "@/components/ui/Select";
+import { Textarea } from "@/components/ui/Textarea";
 import { Button } from "@/components/ui/Button";
 import type { Article } from "@/types";
 import { api } from "@/lib/api";
@@ -14,6 +16,19 @@ interface ArticleFormBodyProps {
   onError: (err: string | null) => void;
   onSubmit: () => void;
 }
+
+const languageOptions = [
+  { value: "en" },
+  { value: "zh" },
+  { value: "ja" },
+  { value: "ko" },
+];
+
+const statusOptions = [
+  { value: "raw" },
+  { value: "analyzed" },
+  { value: "translated" },
+];
 
 export function ArticleFormBody({ initialData, error, onError, onSubmit }: ArticleFormBodyProps) {
   const isEdit = !!initialData;
@@ -71,23 +86,10 @@ export function ArticleFormBody({ initialData, error, onError, onSubmit }: Artic
       <Input label="Title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Article title" required />
       <Input label="Source ID (UUID)" value={sourceId} onChange={(e) => setSourceId(e.target.value)} placeholder={isEdit ? "Not required for edits" : "UUID of the source"} required={!isEdit} />
       <Input label="Summary" value={summary} onChange={(e) => setSummary(e.target.value)} placeholder="Brief summary" />
-      <textarea
-        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-500"
-        rows={4} placeholder="Content" value={content} onChange={(e) => setContent(e.target.value)}
-      />
+      <Textarea rows={4} placeholder="Content" value={content} onChange={(e) => setContent(e.target.value)} />
       <div className="grid grid-cols-2 gap-4">
-        <select
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-          value={language} onChange={(e) => setLanguage(e.target.value)}
-        >
-          <option value="en">English</option><option value="zh">Chinese</option><option value="ja">Japanese</option><option value="ko">Korean</option>
-        </select>
-        <select
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100"
-          value={status} onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="raw">Raw</option><option value="analyzed">Analyzed</option><option value="translated">Translated</option>
-        </select>
+        <Select label="Language" value={language} onChange={(e) => setLanguage(e.target.value)} options={languageOptions} />
+        <Select label="Status" value={status} onChange={(e) => setStatus(e.target.value)} options={statusOptions} />
       </div>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={() => onError(null)}>Cancel</Button>

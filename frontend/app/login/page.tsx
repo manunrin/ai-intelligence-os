@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { useAuth } from "@/lib/auth-context";
+import { api, setAuthToken, unwrapSingle } from "@/lib/api";
+import type { User } from "@/lib/auth-context";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,39 +24,14 @@ export default function LoginPage() {
       setLoading(true);
 
       try {
-        const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-        const res = await fetch(`${API_BASE}/api/v1/auth/login`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ username, password }),
-        });
+        // Login
+        const loginRes = await api.post<unknown>("/api/v1/auth/login", { username, password });
+        const { access_token } = await unwrapSingle<{ access_token: string; token_type: string }>(loginRes);
+        setAuthToken(access_token);
 
-        if (!res.ok) {
-          let msg = "Login failed";
-          try {
-            const body = await res.json();
-            msg = body.error || msg;
-          } catch {
-            // ignore
-          }
-          throw new Error(msg);
-        }
-
-        const json = await res.json();
-        const { access_token, token_type } = json.data;
-
-        // Fetch user profile to get full user object
-        const meRes = await fetch(`${API_BASE}/api/v1/auth/me`, {
-          headers: { Authorization: `${token_type} ${access_token}` },
-        });
-
-        if (!meRes.ok) {
-          throw new Error("Failed to fetch user profile");
-        }
-
-        const meJson = await meRes.json();
-        const userData = meJson.data;
-
+        // Fetch user profile
+        const meRes = await api.get<unknown>("/api/v1/auth/me");
+        const userData = await unwrapSingle<User>(meRes);
         login(access_token, userData);
         router.push("/");
       } catch (err) {

@@ -28,7 +28,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     let message = `API ${res.status}`;
     try {
       const body = await res.json();
-      message = body.error || message;
+      message = body.error || body.detail || message;
     } catch {
       message = `${message}: ${await res.text()}`;
     }
@@ -72,4 +72,14 @@ export async function unwrap<T>(raw: unknown): Promise<T[]> {
   }
   // Fallback: treat the raw value as the array directly
   return Array.isArray(raw) ? (raw as T[]) : [];
+}
+
+/** Unwrap single-object responses: { success, data: T, error }. */
+export async function unwrapSingle<T>(raw: unknown): Promise<T> {
+  if (raw == null) return null as unknown as T;
+  if (typeof raw === "object" && !Array.isArray(raw)) {
+    const obj = raw as Record<string, unknown>;
+    if ("data" in obj) return obj.data as T;
+  }
+  return raw as T;
 }
