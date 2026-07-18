@@ -1,93 +1,208 @@
 # AI Intelligence OS
 
-Enterprise AI Intelligence Operating System — connecting Information → Knowledge → Action.
+Enterprise-grade AI operating system connecting **Information → Knowledge → Action** through intelligent agent workflows, RAG pipelines, and real-time observability.
 
-**Version:** 0.1.0
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-green.svg)](https://fastapi.tiangolo.com)
+[![Next.js](https://img.shields.io/badge/Next.js-15-black.svg)](https://nextjs.org)
+[![Docker Compose](https://img.shields.io/badge/docker-compose-compatible-brightgreen.svg)](https://docs.docker.com/compose/)
 
 ## Architecture
 
 ```
-User → Frontend (Next.js) → Backend API (FastAPI) → Agent Runtime (LangGraph) → AI Agents → Knowledge Layer → External Services
+┌──────────┐     ┌──────────────┐     ┌─────────────────┐     ┌──────────────┐
+│  Browser  │────▶│  Next.js FE  │────▶│  FastAPI Backend │────▶│ LangGraph     │
+│           │     │  (React 19)  │     │  (REST API)      │     │ Agent Runtime │
+└──────────┘     └──────────────┘     └────────┬────────┘     └───────┬──────┘
+                                                │                      │
+                     ┌──────────────────────────┘                      │
+                     ▼                                                  ▼
+              ┌──────────────┐                                ┌─────────────────┐
+              │   Prometheus │                                │  Agent Workers   │
+              │   + Grafana  │                                │  (Async)         │
+              └──────────────┘                                └────────┬────────┘
+                                                                        │
+                     ┌──────────────────────────────────────────────────┤
+                     ▼                                                  ▼
+            ┌─────────────────┐    ┌──────────────┐    ┌─────────────────────────┐
+            │ PostgreSQL      │    │ Qdrant       │    │ MinIO Object Storage    │
+            │ (Relational)    │    │ (Vector DB)  │    │ (Documents/Files)       │
+            └─────────────────┘    └──────────────┘    └─────────────────────────┘
+                     │                    │
+                     ▼                    ▼
+               ┌──────────┐        ┌──────────┐
+               │  Redis   │        │  LLMs    │
+               │ (Cache/  │        │ (OpenAI, │
+               │  Queue)  │        │ Anthropic│
+               └──────────┘        └──────────┘
 ```
 
-## Tech Stack
+## Key Features
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js + TypeScript + TailwindCSS + shadcn/ui |
-| Backend | FastAPI + Python 3.12+ |
-| Agent Framework | LangGraph |
-| LLM Gateway | LiteLLM |
-| Database | PostgreSQL |
-| Vector DB | Qdrant |
-| Cache | Redis |
-| Object Storage | MinIO |
-| Container Orchestration | Docker Compose |
+| Feature | Description |
+|---------|-------------|
+| **Agent Runtime** | LangGraph-based agent orchestration with stage tracking and async execution |
+| **LLM Gateway** | Multi-provider routing with automatic fallback (OpenAI, Anthropic, Ollama, Compatible) |
+| **RAG Pipeline** | Embedding generation + vector search via Qdrant for knowledge retrieval |
+| **Knowledge Layer** | Structured knowledge base with articles, tasks, reports, and audit trails |
+| **Observability** | Prometheus metrics, OpenTelemetry tracing, Grafana dashboards, alerting rules |
+| **MCP Integration** | Model Context Protocol connectors for Notion, Asana, GitHub, Browser |
+| **REST API** | Auto-generated OpenAPI/Swagger docs at `/docs` |
+| **Frontend** | Next.js 15 dashboard with real-time agent stream tracking |
 
 ## Quick Start
 
-```bash
-make start          # Start all services
-make stop           # Stop all services
-make logs           # View live logs
-make test           # Run backend tests
-```
+### Prerequisites
 
-See [docker/README.md](docker/README.md) for full Docker instructions.
+- Docker Engine 24+ with Docker Compose v2
+- 4 GB RAM minimum (8 GB recommended)
+- Python 3.12+ (for local development outside Docker)
 
-## Environments
-
-| Environment | Config File | Purpose |
-|-------------|-------------|---------|
-| Development | `.env.development.example` | Local development with hot reload |
-| Test | `.env.test.example` | CI/testing with isolated data stores |
-| Production | `.env.production.example` | Production deployment |
-
-Copy the appropriate template to `.env` before starting:
+### One-command start
 
 ```bash
-cp .env.development.example .env   # or .env.test.example / .env.production.example
+# 1. Clone and configure
+git clone https://github.com/your-org/ai-intelligence-os.git
+cd ai-intelligence-os
+cp .env.development.example .env
+
+# 2. Start all services
 make start
+
+# 3. Open in browser
+open http://localhost:3000
 ```
 
-Key differences:
+Services will be available at:
 
-- **Development**: debug enabled, local ports exposed, pool_min=1
-- **Test**: isolated database names and Redis indices, mock LLM keys
-- **Production**: debug disabled, strong passwords required, connection pooling increased
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:3000 |
+| Backend API | http://localhost:8000 |
+| API Docs | http://localhost:8000/docs |
+| Prometheus | http://localhost:9090 |
+| Grafana | http://localhost:3001 |
 
-## Makefile Commands
+### Development mode
 
-| Command | Description |
-|---------|-------------|
-| `make start` | Build and start all services (development) |
-| `make stop` | Stop all services, preserve data |
-| `make rebuild` | Rebuild containers without cache |
-| `make clean` | Remove containers, networks, and volumes |
-| `make logs` | Follow all service logs |
-| `make logs-svc svc=<name>` | Follow a single service log |
-| `make test` | Run backend test suite |
-| `make test-unit` | Run unit tests only |
-| `make test-integration` | Run integration tests only |
-| `make init-db` | Run Alembic migrations |
-| `make shell` | Open interactive backend shell |
-| `make db-shell` | Open PostgreSQL psql session |
-| `make redis-cli` | Open Redis CLI session |
-| `make help` | Show all available commands |
+```bash
+# Start infrastructure only
+docker compose up -d postgres redis qdrant minio
 
-## Structure
+# Run backend locally (requires .env)
+uv pip install -e ".[dev]"
+python -m backend.main
+
+# Run frontend locally
+cd frontend && npm install && npm run dev
+```
+
+## Environment Variables
+
+Copy `.env.development.example` to `.env` and adjust as needed.
+
+### Required
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | `postgresql://postgres:postgres@postgres:5432/ai_intelligence_os` | PostgreSQL connection string |
+| `REDIS_URL` | `redis://:redispassword@redis:6379/0` | Redis connection string |
+| `QDRANT_URL` | `http://qdrant:6333` | Qdrant vector database URL |
+| `MINIO_ENDPOINT` | `minio:9000` | MinIO object storage endpoint |
+
+### LLM Providers (at least one required)
+
+| Variable | Description |
+|----------|-------------|
+| `OPENAI_API_KEY` | OpenAI API key for GPT models |
+| `ANTHROPIC_API_KEY` | Anthropic API key for Claude models |
+| `OLLAMA_BASE_URL` | Local Ollama instance URL |
+| `COMPATIBLE_API_BASE` | OpenAI-compatible API base URL |
+
+### MCP Integrations (optional)
+
+| Variable | Description |
+|----------|-------------|
+| `NOTION_TOKEN` / `NOTION_DATABASE_ID` | Notion integration |
+| `ASANA_TOKEN` / `ASANA_WORKSPACE_ID` / `ASANA_PROJECT_ID` | Asana integration |
+| `GITHUB_TOKEN` / `GITHUB_OWNER` / `GITHUB_REPOSITORY` | GitHub integration |
+
+See [`.env.example`](.env.example) for the complete list with descriptions.
+
+## Docker Deployment
+
+### Full stack
+
+```bash
+make start          # Build and start all services
+make stop           # Stop all services (data preserved)
+make rebuild        # Rebuild without cache
+make clean          # Remove containers, networks, volumes
+make logs           # Follow all service logs
+```
+
+### Database
+
+```bash
+make init-db        # Run Alembic migrations
+make db-shell       # Open PostgreSQL shell
+```
+
+### Testing
+
+```bash
+make test           # Run full test suite inside container
+make test-unit      # Unit tests only
+make test-integration  # Integration tests only
+make test-coverage  # Tests with coverage report
+```
+
+## Project Structure
 
 ```
-├── frontend/          # Next.js application
-├── backend/           # FastAPI application
+├── frontend/          # Next.js 15 dashboard application
+├── backend/           # FastAPI REST API + metrics module
+│   ├── routers/       # API route handlers
+│   ├── services/      # Business logic (agent, LLM, embedding, vector)
+│   ├── models/        # SQLAlchemy ORM models
+│   └── utils/         # JWT, security, logging utilities
 ├── agents/            # LangGraph agent definitions
-├── mcp_servers/       # Model Context Protocol servers
+├── database/          # Migrations (Alembic) + seed data
+├── monitoring/        # Prometheus rules + Grafana dashboards
+├── mcp_servers/       # MCP server configurations
 ├── workers/           # Background task workers
-├── database/          # Migrations & seed data
-├── docker/            # Container configurations
-├── tests/             # Integration & unit tests
-├── monitoring/        # Observability configs
-└── scripts/           # Dev & utility scripts
+├── tests/             # Unit + integration tests
+├── scripts/           # Dev utility scripts
+├── docs/              # Documentation
+├── docker-compose.yml # Service orchestration
+└── Makefile           # Build and lifecycle commands
+```
+
+## Observability
+
+| Component | Endpoint | Description |
+|-----------|----------|-------------|
+| Prometheus metrics | `GET /metrics` | Prometheus text exposition format |
+| Accept client metrics | `POST /metrics` | Receive frontend metrics |
+| Health check | `GET /api/health` | Readiness probe (DB + bootstrap) |
+| Liveness probe | `GET /api/live` | Liveness check |
+| API docs | `GET /docs` | Swagger UI (auto-generated) |
+| Grafana | `http://localhost:3001` | Pre-built dashboards |
+
+See [`monitoring/README.md`](monitoring/README.md) for full metrics documentation.
+
+## Testing
+
+```bash
+# Run all tests (inside Docker)
+make test
+
+# Run locally (requires dependencies)
+pytest tests/unit/ -v
+pytest tests/integration/ -v
+
+# Frontend tests
+cd frontend && npm test
 ```
 
 ## License
