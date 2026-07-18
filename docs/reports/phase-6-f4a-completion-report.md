@@ -93,7 +93,10 @@ app/
 
 components/ui/             9 custom UI components (Button, Input, Select, Textarea, Card, Badge, Table, Modal, StatCard)
 components/panels/         6 panel components (Dashboard, Articles, Tasks, Knowledge, Agents, Reports)
-components/forms/          4 form bodies (ArticleForm, TaskForm, KnowledgeForm, ReportForm)
+components/articles/       ArticleForm.tsx
+components/tasks/          TaskForm.tsx
+components/knowledge/      KnowledgeForm.tsx
+components/reports/        ReportForm.tsx
 
 hooks/
 ├── useArticles.ts         React Query: list, create, update
@@ -112,6 +115,7 @@ lib/
 └── toast.tsx              Simple toast notification system (success/error/info)
 
 types/index.ts             6 domain types (Article, KnowledgeItem, AgentRun, Task, IntelligenceReport, AgentInfo)
+middleware.ts              Route protection middleware (client-side auth is primary guard)
 ```
 
 ### Data Layer
@@ -123,6 +127,18 @@ types/index.ts             6 domain types (Article, KnowledgeItem, AgentRun, Tas
 - **Auth**: JWT (python-jose + bcrypt), 30-minute access tokens
 - **LLM**: Multi-provider router with fallback chains (OpenAI, Anthropic, Ollama, Compatible)
 - **Workflow Engine**: LangGraph StateGraph for daily intelligence and autonomous pipelines
+
+### Tools & Pipelines
+
+- **tools/** — `ToolBase` abstraction + `ToolRegistry` (local tools + MCP tool lookup)
+- **pipelines/** — `ArticlePipeline` orchestrator (fetch → research → analyze → translate → knowledge)
+
+### Events
+
+- **events/event.py** — `AuditLogEvent`, `ArticleCreatedEvent`, `BaseEvent`, `AuditAction` enum
+- **events/agent_event.py** — Agent-specific event types
+- **events/publisher.py** — Subscriber registry + dispatch loop
+- **events/subscriber.py** — `AuditLogSubscriber` (persists events to DB)
 
 ---
 
@@ -164,12 +180,15 @@ The `ErrorResponse` class in `backend/models.py` had a different shape (`detail:
 | `get_session_factory` compat stub | `routers/deps.py:212` | Low | Dead code left for test patch compatibility; can be removed once tests exist |
 | `PIPELINE_MAP` comment | `workflows/registry.py:3` | Trivial | Documentation-only reference to prior pattern |
 | `"success": False` in internal dicts | `agents/base.py:85`, `workflows/base.py:90,107` | Low | Internal workflow result dicts, not API responses — out of scope for A4 |
+| `X-Request-ID` not in error body | `routers/errors.py` | Low | Header is set on all responses via `LogMiddleware`, but error response body doesn't include it for client-side debugging |
 | No backend test suite | `backend/tests/` | Medium | 0 tests collected; pytest config exists but no test files |
 | No React error boundary | Frontend | Medium | Rendering crashes show Next.js default overlay |
 | Silent auth refresh failure | `auth-context.tsx:84` | Low | Catches and logs out silently on failure |
 | Silent SSE poll failure | `useAgentStream.ts:77` | Low | Silently retries next interval |
 | No global React Query error handler | `query-client.ts` | Low | Failed queries produce no user-visible feedback |
 | `unwrap`/`unwrapSingle` don't check `success` field | `api.ts:66-85` | Low | Extracts `data` regardless of `success` flag — works for current usage |
+| No frontend config files | Frontend root | Low | No `.eslintrc.json`, `next.config.mjs`, or `tailwind.config.ts` — project uses Next.js defaults + `@tailwindcss/postcss` plugin |
+| Loose frontend types | `types/index.ts` | Info | All domain types use `& Record<string, unknown>` spread, accepting any extra fields from the backend |
 
 ---
 
@@ -220,7 +239,7 @@ The `ErrorResponse` class in `backend/models.py` had a different shape (`detail:
 - Docker Compose for full stack (PostgreSQL + Redis + Qdrant + app)
 - Gunicorn/uvicorn worker configuration
 - Health check endpoints at `/api/health` (already partially implemented)
-- Request ID propagation end-to-end (already logged, not returned in success envelopes)
+- Request ID propagation end-to-end (logged and returned as `X-Request-ID` header; not yet included in error response body for client-side debugging)
 - Environment-specific CORS, logging levels, debug flags
 
 **Impact:** Ready for containerized deployment.
