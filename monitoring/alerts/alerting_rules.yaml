@@ -1,0 +1,155 @@
+groups:
+  - name: ai_intelligence_os_alerts
+    rules:
+
+      # ── Agent Run Alerts ──────────────────────────────────────
+
+      - alert: AgentRunFailureRateHigh
+        expr: |
+          sum(
+            rate(agent_runs_total{status=~"failed|error|timeout"}[30m])
+          )
+          /
+          sum(
+            rate(agent_runs_total[30m])
+          )
+          > 0.05
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Agent run failure rate exceeds 5%"
+          description: |
+            Over the last 30 minutes, {{ $value | humanizePercentage }} of agent runs
+            ended in failed, error, or timeout status. Threshold is 5%.
+          recommended_action: |
+            1. Check /metrics endpoint for agent_runs_total breakdown by status.
+            2. Review structured JSON logs for error traces around the alert window.
+            3. Verify pipeline definitions in config/ are valid.
+            4. Check downstream dependency health (LLM providers, vector store, Redis queue).
+
+      - alert: AgentRunLatencyP95High
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum(
+              rate(agent_run_duration_seconds_bucket{status="completed"}[15m])
+            ) by (le)
+          )
+          > 60
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent run p95 latency exceeds 60 seconds"
+          description: |
+            Over the last 15 minutes, the 95th percentile duration for completed
+            agent runs is {{ $value | humanizeDuration }}, exceeding the 60-second threshold.
+          recommended_action: |
+            1. Check agent_run_duration_seconds histogram buckets via /metrics.
+            2. Identify which agent_type/pipeline is slowest using histogram_quantile by label.
+            3. Review stage-level timing from agent_stages_total and OpenTelemetry spans.
+            4. Consider increasing timeout budgets or optimizing slow pipeline stages.
+
+      # ── LLM Alerts ────────────────────────────────────────────
+
+      - alert: LLMFallbackRateHigh
+        expr: |
+          sum(
+            rate(llm_requests_total{provider!="openai", status="success"}[30m])
+          )
+          /
+          sum(
+            rate(llm_requests_total[30m])
+          )
+          > 0.25
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "LLM fallback rate exceeds 25%"
+          description: |
+            Over the last 30 minutes, {{ $value | humanizePercentage }} of successful
+            LLM requests were served by non-default providers, indicating heavy fallback usage.
+            This suggests the primary provider (openai) is failing frequently.
+          recommended_action: |
+            1. Check llm_requests_total by provider to identify which providers are handling fallback traffic.
+            2. Investigate primary provider (openai) health — check API status pages and error logs.
+            3. Review llm_request_duration_seconds for signs of provider degradation.
+            4. If primary provider is consistently unavailable, consider permanent routing changes.
+
+      - alert: LLMRequestErrorRateHigh
+        expr: |
+          sum(
+            rate(llm_requests_total{status="failed"}[10m])
+          )
+          /
+          sum(
+            rate(llm_requests_total[10m])
+          )
+          > 0.10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "LLM request error rate exceeds 10%"
+          description: |
+            Over the last 10 minutes, {{ $value | humanizePercentage }} of all LLM
+            requests (across all providers and models) returned status=failed.
+          recommended_action: |
+            1. Check llm_requests_total{status="failed"} grouped by provider/model.
+            2. Review LLM provider API status pages and rate limit headers.
+            3. Verify API keys and credentials are valid.
+            4. Check if all providers in the fallback chain are failing simultaneously.
+
+      # ── Vector Search Alerts ──────────────────────────────────
+
+      - alert: VectorSearchErrorRateHigh
+        expr: |
+          sum(
+            rate(vector_search_total{status="failed"}[10m])
+          )
+          /
+          sum(
+            rate(vector_search_total[10m])
+          )
+          > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Vector search error rate exceeds 5%"
+          description: |
+            Over the last 10 minutes, {{ $value | humanizePercentage }} of vector
+            search operations failed. Threshold is 5%.
+          recommended_action: |
+            1. Check Qdrant service health (container status, logs, /api/health).
+            2. Verify vector collection exists and is not corrupted.
+            3. Review embedding pipeline — stale or mismatched embeddings can cause search failures.
+            4. Check disk space on Qdrant storage volume.
+
+      # ── HTTP Alerts ───────────────────────────────────────────
+
+      - alert: HTTP5xxErrorRateHigh
+        expr: |
+          sum(
+            rate(http_requests_total{status=~"5.."}[5m])
+          )
+          /
+          sum(
+            rate(http_requests_total[5m])
+          )
+          > 0.05
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP 5xx error rate exceeds 5%"
+          description: |
+            Over the last 5 minutes, {{ $value | humanizePercentage }} of all HTTP
+            requests returned 5xx status codes. Threshold is 5%.
+          recommended_action: |
+            1. Check application logs for stack traces around the alert window.
+            2. Review http_requests_total broken down by status and path to identify affected endpoints.
+            3. Verify database connectivity and connection pool health.
+            4. Check resource utilization (memory, CPU) on the backend container.
