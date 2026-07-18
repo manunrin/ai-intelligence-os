@@ -26,6 +26,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             headers["Strict-Transport-Security"] = (
                 "max-age=31536000; includeSubDomains"
             )
+        # Content-Security-Policy-Report-Only for monitoring before enforcement
+        headers["Content-Security-Policy-Report-Only"] = (
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data: blob:; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none'; "
+            "object-src 'none'"
+        )
         return headers
 
     async def dispatch(
