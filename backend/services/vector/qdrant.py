@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import logging
+import time as _time
 from typing import Any
 from uuid import UUID
 
 import httpx
+
+from ...metrics import counter, histogram
 
 logger = logging.getLogger(__name__)
 
@@ -82,15 +85,25 @@ class QdrantVectorService:
         """
         if not points:
             return
-        payloads = [
-            {"id": p.id, "vector": p.vector, "payload": p.payload}
-            for p in points
-        ]
-        await self._client.post(
-            f"/collections/{self._collection}/points",
-            json={"points": payloads},
-        )
-        logger.info("Upserted %d points into '%s'", len(points), self._collection)
+        start = _time.monotonic()
+        try:
+            payloads = [
+                {"id": p.id, "vector": p.vector, "payload": p.payload}
+                for p in points
+            ]
+            await self._client.post(
+                f"/collections/{self._collection}/points",
+                json={"points": payloads},
+            )
+            elapsed = _time.monotonic() - start
+            counter("vector_operations_total", labels={"operation": "upsert", "status": "success"})
+            histogram("vector_operation_duration_seconds", elapsed, labels={"operation": "upsert", "status": "success"})
+            logger.info("Upserted %d points into '%s'", len(points), self._collection)
+        except Exception as exc:
+            elapsed = _time.monotonic() - start
+            counter("vector_operations_total", labels={"operation": "upsert", "status": "failed"})
+            histogram("vector_operation_duration_seconds", elapsed, labels={"operation": "upsert", "status": "failed"})
+            raise
 
     async def search(
         self,
@@ -110,29 +123,39 @@ class QdrantVectorService:
         Returns:
             List of result dicts with keys: id, score, payload.
         """
-        params: dict[str, Any] = {
-            "limit": limit,
-        }
-        if score_threshold is not None:
-            params["score_threshold"] = score_threshold
-        body: dict[str, Any] = {"vector": query_vector, "with_payload": True}
-        if filter:
-            body["filter"] = filter
+        start = _time.monotonic()
+        try:
+            params: dict[str, Any] = {
+                "limit": limit,
+            }
+            if score_threshold is not None:
+                params["score_threshold"] = score_threshold
+            body: dict[str, Any] = {"vector": query_vector, "with_payload": True}
+            if filter:
+                body["filter"] = filter
 
-        resp = await self._client.post(
-            f"/collections/{self._collection}/points/search",
-            params=params,
-            json=body,
-        )
-        data = resp.json()
-        results: list[dict[str, Any]] = []
-        for hit in data.get("result", []):
-            results.append({
-                "id": hit.get("id"),
-                "score": hit.get("score"),
-                "payload": hit.get("payload", {}),
-            })
-        return results
+            resp = await self._client.post(
+                f"/collections/{self._collection}/points/search",
+                params=params,
+                json=body,
+            )
+            data = resp.json()
+            results: list[dict[str, Any]] = []
+            for hit in data.get("result", []):
+                results.append({
+                    "id": hit.get("id"),
+                    "score": hit.get("score"),
+                    "payload": hit.get("payload", {}),
+                })
+            elapsed = _time.monotonic() - start
+            counter("vector_search_total", labels={"status": "success"})
+            histogram("vector_search_duration_seconds", elapsed, labels={"status": "success"})
+            return results
+        except Exception as exc:
+            elapsed = _time.monotonic() - start
+            counter("vector_search_total", labels={"status": "failed"})
+            histogram("vector_search_duration_seconds", elapsed, labels={"status": "failed"})
+            raise
 
     async def delete(self, point_ids: list[str | UUID]) -> None:
         """Delete specific points by ID.

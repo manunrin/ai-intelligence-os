@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import time as _time
 
+from ...metrics import counter, histogram
 from .base import EmbeddingProvider, EmbeddingResult
 
 logger = logging.getLogger(__name__)
@@ -28,7 +30,18 @@ class EmbeddingClient:
         Returns:
             EmbeddingResult with vector and metadata.
         """
-        return await self._provider.embed(text, model=model)
+        start = _time.monotonic()
+        try:
+            result = await self._provider.embed(text, model=model)
+            elapsed = _time.monotonic() - start
+            counter("embedding_requests_total", labels={"model": model or "default", "status": "success"})
+            histogram("embedding_request_duration_seconds", elapsed, labels={"model": model or "default", "status": "success"})
+            return result
+        except Exception as exc:
+            elapsed = _time.monotonic() - start
+            counter("embedding_requests_total", labels={"model": model or "default", "status": "failed"})
+            histogram("embedding_request_duration_seconds", elapsed, labels={"model": model or "default", "status": "failed"})
+            raise
 
     async def embed_batch(self, texts: list[str], model: str | None = None) -> list[EmbeddingResult]:
         """Generate embeddings for multiple texts.

@@ -78,8 +78,13 @@ def setup_middleware(app: FastAPI) -> None:
             from ..logging_config import make_request_log_record
             from ..metrics import counter, histogram
 
-            counter("http_requests_total")
-            histogram("http_request_duration_seconds", elapsed)
+            status_str = str(response.status_code)
+            method_str = request.method
+            # Normalize path: strip UUID run IDs for cleaner labels
+            path_str = str(request.url.path)
+
+            counter("http_requests_total", labels={"method": method_str, "status": status_str, "path": path_str})
+            histogram("http_request_duration_seconds", elapsed, labels={"method": method_str, "status": status_str, "path": path_str})
 
             log_record = make_request_log_record(
                 method=request.method,

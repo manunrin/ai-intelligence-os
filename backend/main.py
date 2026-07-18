@@ -158,6 +158,29 @@ def create_app() -> FastAPI:
             media_type="text/plain; charset=utf-8",
         )
 
+    @app.post("/metrics", tags=["observability"], summary="Accept client-side metrics")
+    async def metrics_post_endpoint(raw: str = ""):
+        """Accept Prometheus-formatted metrics from clients (e.g., frontend)."""
+        from .metrics import counter, histogram
+
+        for line in raw.strip().split("\n"):
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            # Parse simple "name value" lines
+            parts = line.split()
+            if len(parts) >= 2:
+                name = parts[0]
+                try:
+                    value = float(parts[1])
+                    if value == int(value):
+                        counter(name, int(value))
+                    else:
+                        histogram(name, value)
+                except ValueError:
+                    pass
+        return JSONResponse(content={"status": "ok"}, status_code=200)
+
     @app.get(
         "/api/health",
         tags=["health"],

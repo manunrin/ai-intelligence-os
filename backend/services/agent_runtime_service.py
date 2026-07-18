@@ -27,6 +27,7 @@ from ..repositories.agent_stage_progress_repository import AgentStageProgressRep
 from ..workflows.executor import Executor, PipelineFactory, RunResult, SyncExecutor
 from ..workflows.registry import PIPELINE_REGISTRY
 from ..context_vars import agent_run_id as _agent_ctx
+from ..metrics import counter, histogram
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +181,9 @@ class AgentRuntimeService:
         logger.info("Agent run submitted: type=%s run=%s", agent_type, str(run_id))
         await self._request_session.commit()
 
+        # Record agent submission metric
+        counter("agent_runs_total", labels={"agent_type": agent_type, "status": "submitted"})
+
         # Set agent run context for downstream log correlation
         _agent_ctx.set(str(run_id))
 
@@ -246,6 +250,11 @@ class AgentRuntimeService:
                 timeout=timeout_seconds,
             )
 
+            # Record agent run completion metric with stage info
+            counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": result.status})
+            if result.duration_ms is not None:
+                histogram("agent_run_duration_seconds", result.duration_ms / 1000.0, labels={"agent_type": pipeline_type, "status": result.status})
+
             if result.status == "cancelled":
                 await self._finalize_cancelled(repo, run_id, result)
             elif result.status in ("completed", "failed"):
@@ -261,6 +270,7 @@ class AgentRuntimeService:
                 run_id=run_id,
                 error_message=f"Run exceeded {timeout_seconds}s timeout",
             ))
+            counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": "timeout"})
 
         except Exception as exc:
             logger.exception("Unexpected error in run %s", str(run_id))
@@ -269,6 +279,7 @@ class AgentRuntimeService:
                 run_id=run_id,
                 error_message=str(exc),
             ))
+            counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": "error"})
 
         finally:
             self._cancellation_tokens.pop(run_id, None)
@@ -348,6 +359,10 @@ class AgentRuntimeService:
             elif event.phase == "error":
                 info["status"] = "failed"
                 info["error_message"] = event.error_message
+
+        # Record stage-level histogram metrics
+        for name in stages_by_name:
+            counter("agent_stages_total", labels={"stage_name": name})
 
         for order, (name, info) in enumerate(sorted(stages_by_name.items(), key=lambda x: x[0])):
             await stage_repo.create_stage(
