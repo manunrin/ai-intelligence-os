@@ -20,7 +20,7 @@ def _make_mock_session():
 
     class MockSession:
         execute = AsyncMock(return_value=result)
-        add = AsyncMock()
+        add = MagicMock()
         commit = AsyncMock()
         flush = AsyncMock()
         close = AsyncMock()

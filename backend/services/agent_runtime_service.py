@@ -26,6 +26,7 @@ from ..repositories.agent_run_repository import AgentRunRepository
 from ..repositories.agent_stage_progress_repository import AgentStageProgressRepository
 from ..workflows.executor import Executor, PipelineFactory, RunResult, SyncExecutor
 from ..workflows.registry import PIPELINE_REGISTRY
+from ..context_vars import agent_run_id as _agent_ctx
 
 logger = logging.getLogger(__name__)
 
@@ -179,6 +180,9 @@ class AgentRuntimeService:
         logger.info("Agent run submitted: type=%s run=%s", agent_type, str(run_id))
         await self._request_session.commit()
 
+        # Set agent run context for downstream log correlation
+        _agent_ctx.set(str(run_id))
+
         # Publish audit event for the run creation
         try:
             from ..context_vars import ip_address as _ip_ctx, user_agent as _ua_ctx
@@ -269,6 +273,7 @@ class AgentRuntimeService:
         finally:
             self._cancellation_tokens.pop(run_id, None)
             self._run_tasks.pop(run_id, None)
+            _agent_ctx.set(None)
             await session.close()
 
     async def _finalize_completed(

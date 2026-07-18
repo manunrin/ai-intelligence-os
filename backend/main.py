@@ -148,6 +148,16 @@ def create_app() -> FastAPI:
         """Always returns 200 if process is alive (Kubernetes liveness probe)."""
         return {"status": "ok"}
 
+    @app.get("/metrics", tags=["observability"], summary="Prometheus-compatible metrics")
+    async def metrics_endpoint():
+        """Return application metrics in Prometheus text exposition format."""
+        from .metrics import format_prometheus
+
+        return JSONResponse(
+            content=format_prometheus(),
+            media_type="text/plain; charset=utf-8",
+        )
+
     @app.get(
         "/api/health",
         tags=["health"],

@@ -75,13 +75,6 @@ class RagRetriever:
         # Step 2: Build Qdrant filter
         qdrant_filter: dict[str, Any] | None = None
         if kind_filter or tag_filter:
-            conditions: dict[str, Any] = {}
-            if kind_filter:
-                conditions["kind"] = kind_filter
-            if tag_filter:
-                conditions["tags"] = tag_filter
-            qdrant_filter = {"must": [{"key": "metadata", "match": {"value": v}}}
-            # Simplified: use payload filtering via Qdrant
             qdrant_filter = {"must": []}
             if kind_filter:
                 qdrant_filter["must"].append({"key": "kind", "match": {"value": kind_filter}})

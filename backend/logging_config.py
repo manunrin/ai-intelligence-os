@@ -9,6 +9,16 @@ import uuid
 from datetime import datetime, timezone
 
 
+class RequestIDFilter(logging.Filter):
+    """Automatically inject request_id into every log record."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        from .context_vars import request_id as _ctx
+
+        record.request_id = _ctx.get() or "unknown"
+        return True
+
+
 class JSONFormatter(logging.Formatter):
     """Format log records as JSON for log aggregation systems."""
 
@@ -18,9 +28,8 @@ class JSONFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
+            "request_id": getattr(record, "request_id", "unknown"),
         }
-        if hasattr(record, "request_id"):
-            log_entry["request_id"] = record.request_id
         if hasattr(record, "duration_ms") and record.duration_ms is not None:
             log_entry["duration_ms"] = round(record.duration_ms, 2)
         if hasattr(record, "method"):
@@ -43,6 +52,12 @@ def setup_logging(level: str = "INFO") -> None:
     root_logger.handlers.clear()
     root_logger.addHandler(handler)
     root_logger.setLevel(getattr(logging, level.upper(), logging.INFO))
+
+    # Attach request_id filter to every logger
+    request_filter = RequestIDFilter()
+    root_logger.addFilter(request_filter)
+    for name in ("uvicorn", "fastapi"):
+        logging.getLogger(name).addFilter(request_filter)
 
     # Silence noisy third-party loggers
     for logger_name in ("uvicorn.access", "sqlalchemy.engine", "httpx"):

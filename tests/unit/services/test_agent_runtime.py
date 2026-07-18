@@ -25,7 +25,7 @@ def _make_mock_session():
 
     class MockSession:
         execute = AsyncMock(return_value=result)
-        add = AsyncMock()
+        add = MagicMock()
         commit = AsyncMock()
         flush = AsyncMock()
         close = AsyncMock()
@@ -60,7 +60,7 @@ def mock_stage_repo(mock_session):
 @pytest.fixture()
 def service(mock_session, mock_repo, mock_stage_repo):
     sf = MagicMock()
-    sf.return_value = AsyncMock()
+    sf.return_value = MagicMock()
     svc = AgentRuntimeService(mock_session, session_factory=sf)
     with patch(
         "backend.services.agent_runtime_service._make_repo",
