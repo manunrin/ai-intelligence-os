@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+import uuid
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class ArticleCreate(BaseModel):
@@ -16,6 +18,15 @@ class ArticleCreate(BaseModel):
     status: str = Field(default="raw", max_length=16)
     metadata_: dict | None = Field(None, description="Additional metadata as JSON")
 
+    @field_validator("source_id")
+    @classmethod
+    def validate_source_id(cls, v: str) -> str:
+        try:
+            uuid.UUID(v)
+        except ValueError:
+            raise ValueError(f"source_id must be a valid UUID string, got {v!r}")
+        return v
+
 
 class ArticleUpdate(BaseModel):
     """Schema for updating an existing article."""
@@ -27,3 +38,14 @@ class ArticleUpdate(BaseModel):
     language: str | None = Field(None, max_length=8)
     status: str | None = Field(None, max_length=16)
     metadata_: dict | None = Field(None, description="Additional metadata as JSON")
+
+    @field_validator("source_id")
+    @classmethod
+    def validate_source_id(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        try:
+            uuid.UUID(v)
+        except ValueError:
+            raise ValueError(f"source_id must be a valid UUID string, got {v!r}")
+        return v

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+import uuid
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class TaskCreate(BaseModel):
@@ -17,6 +19,28 @@ class TaskCreate(BaseModel):
     agent_run_id: str | None = Field(None, description="UUID of the triggering agent run")
     knowledge_item_id: str | None = Field(None, description="UUID of the related knowledge item")
     due_date: str | None = Field(None, description="ISO-8601 datetime string")
+
+    @field_validator("agent_run_id")
+    @classmethod
+    def validate_agent_run_id(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        try:
+            uuid.UUID(v)
+        except ValueError:
+            raise ValueError(f"agent_run_id must be a valid UUID string, got {v!r}")
+        return v
+
+    @field_validator("knowledge_item_id")
+    @classmethod
+    def validate_knowledge_item_id(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        try:
+            uuid.UUID(v)
+        except ValueError:
+            raise ValueError(f"knowledge_item_id must be a valid UUID string, got {v!r}")
+        return v
 
 
 class TaskUpdate(BaseModel):

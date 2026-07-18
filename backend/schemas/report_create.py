@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+import uuid
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class ReportCreate(BaseModel):
@@ -16,6 +18,27 @@ class ReportCreate(BaseModel):
     agent_run_id: str | None = Field(None, description="UUID of the triggering agent run")
     generated_by: str | None = Field(None, max_length=64)
 
+    @field_validator("agent_run_id")
+    @classmethod
+    def validate_agent_run_id(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        try:
+            uuid.UUID(v)
+        except ValueError:
+            raise ValueError(f"agent_run_id must be a valid UUID string, got {v!r}")
+        return v
+
+    @field_validator("article_ids")
+    @classmethod
+    def validate_article_ids(cls, v: list[str]) -> list[str]:
+        for item in v:
+            try:
+                uuid.UUID(item)
+            except ValueError:
+                raise ValueError(f"Each article_id must be a valid UUID string, got {item!r}")
+        return v
+
 
 class ReportUpdate(BaseModel):
     """Schema for updating an existing intelligence report."""
@@ -25,3 +48,15 @@ class ReportUpdate(BaseModel):
     category: str | None = Field(None, max_length=64)
     importance_score: float | None = Field(None, ge=0, le=10)
     article_ids: list[str] | None = Field(None)
+
+    @field_validator("article_ids")
+    @classmethod
+    def validate_article_ids(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return v
+        for item in v:
+            try:
+                uuid.UUID(item)
+            except ValueError:
+                raise ValueError(f"Each article_id must be a valid UUID string, got {item!r}")
+        return v

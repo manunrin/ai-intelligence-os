@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+import uuid
+
+from pydantic import BaseModel, Field, field_validator
 
 
 class KnowledgeItemCreate(BaseModel):
@@ -13,6 +15,17 @@ class KnowledgeItemCreate(BaseModel):
     kind: str = Field(..., max_length=32)
     article_id: str | None = Field(None, description="UUID of the related article")
     tags: list[str] = Field(default_factory=list)
+
+    @field_validator("article_id")
+    @classmethod
+    def validate_article_id(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        try:
+            uuid.UUID(v)
+        except ValueError:
+            raise ValueError(f"article_id must be a valid UUID string, got {v!r}")
+        return v
 
 
 class KnowledgeItemUpdate(BaseModel):
