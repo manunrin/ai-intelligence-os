@@ -6,6 +6,7 @@
  */
 import { useEffect, useRef, useCallback, useState } from "react";
 import { api, unwrapSingle } from "@/lib/api";
+import { inc, hist } from "@/lib/observability";
 import type { AgentRun } from "@/types";
 
 export interface AgentStreamEvent {
@@ -90,6 +91,10 @@ export function useAgentStream({
         if (cancelled) return;
         try {
           const event: AgentStreamEvent = JSON.parse(e.data);
+          inc("agent_stream_events_total", { type: event.type });
+          if (event.duration_ms) {
+            hist("agent_stage_duration_seconds", event.duration_ms / 1000, { stage: event.stage_name ?? "unknown" });
+          }
           onEventRef.current?.(event);
         } catch {
           // ignore parse errors on heartbeat / raw messages

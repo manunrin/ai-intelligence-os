@@ -1,5 +1,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
+import { hist, inc } from "@/lib/observability";
+
 /** Optional auth token — set by the auth context before making requests. */
 let authToken: string | null = null;
 
@@ -27,10 +29,17 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     headers.Authorization = `Bearer ${authToken}`;
   }
 
+  const start = Date.now();
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { ...headers, ...(options?.headers ?? {}) },
     ...options,
   });
+
+  const elapsed = (Date.now() - start) / 1000; // seconds
+  const method = options?.method ?? "GET";
+  const status = String(res.status);
+  inc("http_requests_total", { method, status, path });
+  hist("http_request_duration_seconds", elapsed, { method, status, path });
 
   if (!res.ok) {
     // Token expired or invalid — notify auth context to clear state
