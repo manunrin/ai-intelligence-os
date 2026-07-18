@@ -13,6 +13,7 @@ from ..schemas.response import APIResponse
 from .deps import get_current_user, get_knowledge_service
 from .pagination import PaginationParams, get_pagination
 from ..services.knowledge_service import KnowledgeItemService
+from ..rate_limiter import limiter
 
 router = APIRouter(
     prefix="/knowledge",
@@ -72,8 +73,10 @@ async def get_knowledge_item(
     operation_id="createKnowledgeItem",
     response_model=APIResponse[KnowledgeItemResponse],
 )
+@limiter.limit("100/hour")
 async def create_knowledge_item(
     data: KnowledgeItemCreate,
+    request: Request,
     current_user: Any = Depends(get_current_user),
     service: KnowledgeItemService = Depends(get_knowledge_service),
 ):
@@ -88,8 +91,10 @@ async def create_knowledge_item(
     operation_id="updateKnowledgeItem",
     response_model=APIResponse[KnowledgeItemResponse],
 )
+@limiter.limit("100/hour")
 async def update_knowledge_item(
     item_id: str,
+    request: Request,
     data: KnowledgeItemUpdate,
     current_user: Any = Depends(get_current_user),
     service: KnowledgeItemService = Depends(get_knowledge_service),
@@ -107,8 +112,10 @@ async def update_knowledge_item(
     operation_id="deleteKnowledgeItem",
     response_model=APIResponse[None],
 )
+@limiter.limit("100/hour")
 async def delete_knowledge_item(
     item_id: str,
+    request: Request,
     current_user: Any = Depends(get_current_user),
     service: KnowledgeItemService = Depends(get_knowledge_service),
 ):

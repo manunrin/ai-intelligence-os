@@ -13,6 +13,7 @@ from ..schemas.response import APIResponse
 from .deps import get_current_user, get_report_service
 from .pagination import PaginationParams, get_pagination
 from ..services.report_service import ReportService
+from ..rate_limiter import limiter
 
 router = APIRouter(
     prefix="/reports",
@@ -72,8 +73,10 @@ async def get_report(
     operation_id="createReport",
     response_model=APIResponse[IntelligenceReportResponse],
 )
+@limiter.limit("100/hour")
 async def create_report(
     data: ReportCreate,
+    request: Request,
     current_user: Any = Depends(get_current_user),
     service: ReportService = Depends(get_report_service),
 ):

@@ -23,6 +23,7 @@ from ..services.agent_runtime_service import (
     AgentRunNotFoundError,
 )
 from ..services.agent_runtime_service import _run_to_dict
+from ..rate_limiter import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +118,10 @@ async def get_agent_run(
     operation_id="submitAgentRun",
     response_model=APIResponse[AgentRunResponse],
 )
+@limiter.limit("20/hour")
 async def submit_agent_run(
     body: AgentRunRequest,
+    request: Request,
     current_user: Any = Depends(get_current_user),
     service: AgentRuntimeService = Depends(get_runtime_service_with_event_pub),
 ):
@@ -175,8 +178,10 @@ async def stream_agent_status(
     operation_id="cancelAgentRun",
     response_model=APIResponse[dict[str, Any]],
 )
+@limiter.limit("20/hour")
 async def cancel_agent_run(
     run_id: str,
+    request: Request,
     current_user: Any = Depends(get_current_user),
     service: AgentRuntimeService = Depends(get_runtime_service_with_event_pub),
 ):

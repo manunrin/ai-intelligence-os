@@ -13,6 +13,7 @@ from ..schemas.response import APIResponse
 from .deps import get_current_user, get_article_service
 from .pagination import PaginationParams, get_pagination
 from ..services.article_service import ArticleService
+from ..rate_limiter import limiter
 
 router = APIRouter(
     prefix="/articles",
@@ -72,8 +73,10 @@ async def get_article(
     operation_id="createArticle",
     response_model=APIResponse[ArticleResponse],
 )
+@limiter.limit("100/hour")
 async def create_article(
     data: ArticleCreate,
+    request: Request,
     current_user: Any = Depends(get_current_user),
     service: ArticleService = Depends(get_article_service),
 ):
@@ -88,8 +91,10 @@ async def create_article(
     operation_id="updateArticle",
     response_model=APIResponse[ArticleResponse],
 )
+@limiter.limit("100/hour")
 async def update_article(
     article_id: str,
+    request: Request,
     data: ArticleUpdate,
     current_user: Any = Depends(get_current_user),
     service: ArticleService = Depends(get_article_service),
@@ -107,8 +112,10 @@ async def update_article(
     operation_id="deleteArticle",
     response_model=APIResponse[None],
 )
+@limiter.limit("100/hour")
 async def delete_article(
     article_id: str,
+    request: Request,
     current_user: Any = Depends(get_current_user),
     service: ArticleService = Depends(get_article_service),
 ):

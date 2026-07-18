@@ -13,6 +13,7 @@ from ..schemas.task_create import TaskCreate, TaskUpdate
 from .deps import get_current_user, get_task_service
 from .pagination import PaginationParams, get_pagination
 from ..services.task_service import TaskService
+from ..rate_limiter import limiter
 
 router = APIRouter(
     prefix="/tasks",
@@ -72,8 +73,10 @@ async def get_task(
     operation_id="createTask",
     response_model=APIResponse[TaskResponse],
 )
+@limiter.limit("100/hour")
 async def create_task(
     data: TaskCreate,
+    request: Request,
     current_user: Any = Depends(get_current_user),
     service: TaskService = Depends(get_task_service),
 ):
@@ -88,8 +91,10 @@ async def create_task(
     operation_id="updateTask",
     response_model=APIResponse[TaskResponse],
 )
+@limiter.limit("100/hour")
 async def update_task(
     task_id: str,
+    request: Request,
     data: TaskUpdate,
     current_user: Any = Depends(get_current_user),
     service: TaskService = Depends(get_task_service),
@@ -107,8 +112,10 @@ async def update_task(
     operation_id="deleteTask",
     response_model=APIResponse[None],
 )
+@limiter.limit("100/hour")
 async def delete_task(
     task_id: str,
+    request: Request,
     current_user: Any = Depends(get_current_user),
     service: TaskService = Depends(get_task_service),
 ):
