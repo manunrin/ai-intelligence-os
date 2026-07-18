@@ -9,6 +9,7 @@ import pytest
 
 from backend.schemas.agent_run import AgentRunResponse
 from backend.schemas.article import ArticleResponse
+from backend.schemas.error import ErrorResponse
 from backend.schemas.knowledge import KnowledgeItemResponse
 from backend.schemas.report import IntelligenceReportResponse
 from backend.schemas.response import APIResponse
@@ -27,9 +28,10 @@ class TestAPIResponse:
         assert resp.error is None
 
     def test_error_without_data(self) -> None:
-        resp = APIResponse(success=False, data=None, error="bad")
+        resp = APIResponse(success=False, data=None, error=ErrorResponse(code="UNKNOWN", message="bad"))
         assert resp.success is False
-        assert resp.error == "bad"
+        assert resp.error is not None
+        assert resp.error.message == "bad"
 
 
 # ------------------------------------------------------------------

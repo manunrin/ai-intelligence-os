@@ -12,7 +12,6 @@ import pytest
 from backend.services.agent_runtime_service import (
     AgentRuntimeService,
     AgentRunNotFoundError,
-    PIPELINE_MAP,
     _run_to_dict,
 )
 
@@ -114,10 +113,11 @@ class TestAgentRuntimeServiceSubmit:
                 user_id=uuid.uuid4(),
             )
 
-    def test_submit_pipeline_map_has_expected_keys(self):
-        """PIPELINE_MAP contains expected pipeline types."""
-        assert "intelligence" in PIPELINE_MAP
-        assert "autonomous" in PIPELINE_MAP
+    def test_available_pipelines_have_registry(self):
+        """PIPELINE_REGISTRY contains expected pipeline types."""
+        from backend.workflows.registry import PIPELINE_REGISTRY
+        assert "intelligence" in PIPELINE_REGISTRY
+        assert "autonomous" in PIPELINE_REGISTRY
 
 
 class TestAgentRuntimeServiceGetRun:

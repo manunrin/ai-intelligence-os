@@ -23,6 +23,7 @@ RUN apt-get update && \
 
 COPY --from=builder /build/wheels /wheels
 COPY backend /app/backend
+COPY tests /app/tests
 
 RUN pip install --no-cache-dir /wheels/* && \
     chown -R appuser:appuser /app

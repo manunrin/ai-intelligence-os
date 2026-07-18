@@ -53,6 +53,9 @@ test-unit:      ## Run backend unit tests only
 test-integration: ## Run backend integration tests
 	$(COMPOSE) exec backend pytest tests/integration/ -v
 
+test-coverage:  ## Run backend tests with coverage report
+	$(COMPOSE) exec backend pytest --cov=backend --cov-report=term-missing --cov-fail-under=60
+
 # ── Development ────────────────────────────────────────────
 
 shell:          ## Open backend shell
