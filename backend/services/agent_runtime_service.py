@@ -13,7 +13,6 @@ Actual agent work is delegated to existing LangGraph pipelines via the Executor 
 from __future__ import annotations
 
 import asyncio
-import importlib
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
@@ -26,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ..repositories.agent_run_repository import AgentRunRepository
 from ..repositories.agent_stage_progress_repository import AgentStageProgressRepository
 from ..workflows.executor import Executor, PipelineFactory, RunResult, SyncExecutor
+from ..workflows.registry import PIPELINE_REGISTRY
 
 logger = logging.getLogger(__name__)
 
@@ -50,13 +50,6 @@ def _run_to_dict(run: Any) -> dict[str, Any]:
         "duration_ms": run.duration_ms,
         "user_id": str(run.user_id) if run.user_id else None,
     }
-
-
-# Pipeline type → factory function mapping
-PIPELINE_MAP: dict[str, Any] = {
-    "intelligence": "backend.workflows.daily_intelligence.compile_intelligence_graph",
-    "autonomous": "backend.workflows.autonomous_intelligence.compile_autonomous_intelligence",
-}
 
 
 class AgentNotFoundError(Exception):
@@ -144,9 +137,9 @@ class AgentRuntimeService:
         Creates an AgentRun record, resolves the pipeline factory,
         dispatches to the executor, and returns immediately.
         """
-        if agent_type not in PIPELINE_MAP:
+        if agent_type not in PIPELINE_REGISTRY:
             raise ValueError(
-                f"Unknown agent_type '{agent_type}'. Valid types: {list(PIPELINE_MAP.keys())}"
+                f"Unknown agent_type '{agent_type}'. Valid types: {list(PIPELINE_REGISTRY.keys())}"
             )
 
         run_id = uuid.uuid4()
@@ -230,10 +223,7 @@ class AgentRuntimeService:
         repo, stage_repo = _make_repo(session)
 
         try:
-            module_path = PIPELINE_MAP[pipeline_type]
-            mod_path, func_name = module_path.rsplit(".", 1)
-            mod = importlib.import_module(mod_path)
-            graph_builder = getattr(mod, func_name)
+            graph_builder = PIPELINE_REGISTRY[pipeline_type]
 
             def factory():
                 return graph_builder()
