@@ -8,6 +8,19 @@ export function setAuthToken(token: string | null): void {
   authToken = token;
 }
 
+/** Structured API error returned by the unified error envelope. */
+export class ApiError extends Error {
+  code: string;
+  details?: Record<string, unknown>[];
+
+  constructor(code: string, message: string, details?: Record<string, unknown>[]) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+    this.details = details;
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (authToken) {
@@ -25,14 +38,24 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       setAuthToken(null);
     }
 
+    let code = "ERROR";
     let message = `API ${res.status}`;
     try {
       const body = await res.json();
-      message = body.error || body.detail || message;
-    } catch {
-      message = `${message}: ${await res.text()}`;
+      code = body.code ?? code;
+      message = body.message || body.error || body.detail || message;
+      if (body.details) {
+        throw new ApiError(code, message, body.details);
+      }
+    } catch (err) {
+      if (err instanceof ApiError) throw err;
+      try {
+        message = `${message}: ${await res.text()}`;
+      } catch {
+        // message already set above
+      }
     }
-    throw new Error(message);
+    throw new ApiError(code, message);
   }
 
   return res.json();

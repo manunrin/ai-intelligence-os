@@ -105,7 +105,7 @@ async def get_agent_run(
 ):
     result = await service.get_run(run_id)
     if result is None:
-        return APIResponse(success=False, data=None, error="Agent run not found")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent run not found")
     return APIResponse(success=True, data=result, error=None)
 
 

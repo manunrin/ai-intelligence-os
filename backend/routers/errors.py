@@ -9,7 +9,10 @@ import uuid
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from slowapi.errors import RateLimitExceeded
 from starlette.middleware.base import BaseHTTPMiddleware
+
+from ..schemas.error import ErrorResponse
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -17,17 +20,27 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def validation_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+        error = ErrorResponse.from_validation_error(exc)
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            content={"success": False, "data": None, "error": str(exc)},
+            content=error.model_dump(),
         )
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+        error = ErrorResponse.from_http_exception(exc)
         return JSONResponse(
             status_code=exc.status_code,
-            content={"success": False, "data": None, "error": exc.detail},
+            content=error.model_dump(),
             headers=exc.headers,
+        )
+
+    @app.exception_handler(RateLimitExceeded)
+    async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
+        error = ErrorResponse.from_rate_limit_exceeded()
+        return JSONResponse(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            content=error.model_dump(),
         )
 
     @app.exception_handler(Exception)
@@ -35,9 +48,10 @@ def register_exception_handlers(app: FastAPI) -> None:
         request_id = getattr(request.state, "request_id", "unknown")
         logger = logging.getLogger(__name__)
         logger.error("Unhandled exception: %s", exc, exc_info=True, extra={"request_id": request_id})
+        error = ErrorResponse.from_unhandled_exception(exc)
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            content={"success": False, "data": None, "error": "Internal server error"},
+            content=error.model_dump(),
         )
 
 
