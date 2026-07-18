@@ -16,7 +16,7 @@ from ..schemas.agent_run import (
 )
 from ..schemas.error import ErrorResponse
 from ..schemas.response import APIResponse
-from .deps import get_current_user, get_db
+from .deps import get_current_user, get_runtime_service_with_event_pub
 from .pagination import PaginationParams, get_pagination
 from ..services.agent_runtime_service import (
     AgentRuntimeService,
@@ -25,20 +25,6 @@ from ..services.agent_runtime_service import (
 from ..services.agent_runtime_service import _run_to_dict
 
 logger = logging.getLogger(__name__)
-
-
-def _make_runtime_service(db, request):
-    """Create runtime service bound to request session, with factory for bg tasks."""
-    sf = getattr(request.app.state, 'session_factory', None)
-    return AgentRuntimeService(db, session_factory=sf)
-
-
-def _make_runtime_service_with_event_pub(request, db):
-    """Create runtime service with event publisher for audit logging."""
-    svc = _make_runtime_service(db, request)
-    svc._event_publisher = request.app.state.event_publisher
-    return svc
-
 
 router = APIRouter(
     prefix="/agents",
@@ -94,10 +80,8 @@ async def list_agents():
 async def list_agent_runs(
     pagination: PaginationParams = Depends(get_pagination),
     current_user: Any = Depends(get_current_user),
-    db=Depends(get_db),
-    request: Request = None,
+    service: AgentRuntimeService = Depends(get_runtime_service_with_event_pub),
 ):
-    service = _make_runtime_service(db, request)
     runs = await service.list_agent_runs(
         current_user.id, offset=pagination.offset, limit=pagination.limit
     )
@@ -116,10 +100,8 @@ async def list_agent_runs(
 async def get_agent_run(
     run_id: str,
     current_user: Any = Depends(get_current_user),
-    db=Depends(get_db),
-    request: Request = None,
+    service: AgentRuntimeService = Depends(get_runtime_service_with_event_pub),
 ):
-    service = _make_runtime_service(db, request)
     result = await service.get_run(run_id)
     if result is None:
         return APIResponse(success=False, data=None, error="Agent run not found")
@@ -138,13 +120,8 @@ async def get_agent_run(
 async def submit_agent_run(
     body: AgentRunRequest,
     current_user: Any = Depends(get_current_user),
-    db=Depends(get_db),
-    request: Request = None,
+    service: AgentRuntimeService = Depends(get_runtime_service_with_event_pub),
 ):
-    service = _make_runtime_service(db, request)
-    if request and hasattr(request.app.state, 'event_publisher'):
-        service._event_publisher = request.app.state.event_publisher
-
     # Merge input_payload with convenience fields
     payload = dict(body.input_payload)
     payload["_agent_type"] = body.agent_type
@@ -171,12 +148,9 @@ async def submit_agent_run(
 )
 async def stream_agent_status(
     run_id: str,
-    request: Request,
     current_user: Any = Depends(get_current_user),
-    db=Depends(get_db),
+    service: AgentRuntimeService = Depends(get_runtime_service_with_event_pub),
 ):
-    service = _make_runtime_service(db, request)
-
     async def event_stream():
         async for event_str in service.stream_events(run_id):
             yield event_str
@@ -204,10 +178,8 @@ async def stream_agent_status(
 async def cancel_agent_run(
     run_id: str,
     current_user: Any = Depends(get_current_user),
-    db=Depends(get_db),
-    request: Request = None,
+    service: AgentRuntimeService = Depends(get_runtime_service_with_event_pub),
 ):
-    service = _make_runtime_service(db, request)
     result = await service.cancel_run(run_id, user_id=current_user.id)
     return APIResponse(success=True, data=result, error=None)
 
@@ -225,11 +197,9 @@ async def run_agent(
     agent_id: str,
     body: dict[str, Any] | None = None,
     current_user: Any = Depends(get_current_user),
-    db=Depends(get_db),
-    request: Request = None,
+    service: AgentRuntimeService = Depends(get_runtime_service_with_event_pub),
 ):
     """Legacy endpoint — delegates to runtime service with 'intelligence' pipeline type."""
-    service = _make_runtime_service(db, request)
     payload = body or {}
     payload.setdefault("agent_id", agent_id)
     run = await service.submit(

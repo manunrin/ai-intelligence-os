@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, AsyncMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -40,38 +40,40 @@ class TrackingRuntimeService:
         }
 
 
-def _make_client():
-    from unittest.mock import MagicMock
-
+def _make_client_with_override(mock_service_cls):
     fake_user = MagicMock()
     fake_user.id = uuid.uuid4()
     fake_user.username = "testuser"
     fake_user.role = "user"
     fake_user.is_active = True
 
-    from backend.main import create_app
-    from backend.routers.deps import get_current_user
-
     app = create_app()
+
+    from backend.routers.deps import get_current_user, get_runtime_service_with_event_pub
 
     async def mock_get_current_user():
         return fake_user
 
     app.dependency_overrides[get_current_user] = mock_get_current_user
-    return TestClient(app), app
+
+    def make_mock_service():
+        return mock_service_cls(None)
+
+    app.dependency_overrides[get_runtime_service_with_event_pub] = make_mock_service
+
+    client = TestClient(app)
+    return client, app
 
 
 class TestAgentRunLegacy:
     """Test legacy POST /agents/{agent_id}/run endpoint."""
 
     def test_post_run_agent_legacy(self):
-        client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.agents.AgentRuntimeService", TrackingRuntimeService):
-                resp = client.post(
-                    f"/api/v1/agents/{uuid.uuid4()}/run",
-                    json={"query": "test"},
-                )
+        client, app = _make_client_with_override(TrackingRuntimeService)
+        resp = client.post(
+            f"/api/v1/agents/{uuid.uuid4()}/run",
+            json={"query": "test"},
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
@@ -79,10 +81,8 @@ class TestAgentRunLegacy:
         app.dependency_overrides.clear()
 
     def test_post_run_agent_legacy_no_body(self):
-        client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.agents.AgentRuntimeService", TrackingRuntimeService):
-                resp = client.post(f"/api/v1/agents/{uuid.uuid4()}/run")
+        client, app = _make_client_with_override(TrackingRuntimeService)
+        resp = client.post(f"/api/v1/agents/{uuid.uuid4()}/run")
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "running"
         app.dependency_overrides.clear()
@@ -92,16 +92,14 @@ class TestAgentRunSubmit:
     """Test new POST /agents/run endpoint."""
 
     def test_submit_agent_run(self):
-        client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.agents.AgentRuntimeService", TrackingRuntimeService):
-                resp = client.post(
-                    "/api/v1/agents/run",
-                    json={
-                        "agent_type": "intelligence",
-                        "input_payload": {"topic": "AI trends"},
-                    },
-                )
+        client, app = _make_client_with_override(TrackingRuntimeService)
+        resp = client.post(
+            "/api/v1/agents/run",
+            json={
+                "agent_type": "intelligence",
+                "input_payload": {"topic": "AI trends"},
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
@@ -113,17 +111,15 @@ class TestAgentRunSubmit:
         which raises ValueError caught by the exception handler."""
         # This test validates the endpoint accepts valid payloads.
         # Validation errors from submit() are tested in service unit tests.
-        client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.agents.AgentRuntimeService", TrackingRuntimeService):
-                resp = client.post(
-                    "/api/v1/agents/run",
-                    json={
-                        "agent_type": "intelligence",
-                        "input_payload": {"topic": "AI trends"},
-                        "topic": "AI trends",
-                    },
-                )
+        client, app = _make_client_with_override(TrackingRuntimeService)
+        resp = client.post(
+            "/api/v1/agents/run",
+            json={
+                "agent_type": "intelligence",
+                "input_payload": {"topic": "AI trends"},
+                "topic": "AI trends",
+            },
+        )
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True

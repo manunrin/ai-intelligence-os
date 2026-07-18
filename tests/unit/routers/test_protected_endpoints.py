@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -87,19 +87,15 @@ class ProtectedTrackingService:
 
 
 def _make_client():
-    from unittest.mock import MagicMock
-    import uuid as _uuid
-
     fake_user = MagicMock()
-    fake_user.id = _uuid.uuid4()
+    fake_user.id = uuid.uuid4()
     fake_user.username = "testuser"
     fake_user.role = "user"
     fake_user.is_active = True
 
-    from backend.main import create_app
-    from backend.routers.deps import get_current_user
-
     app = create_app()
+
+    from backend.routers.deps import get_current_user
 
     async def mock_get_current_user():
         return fake_user
@@ -112,54 +108,43 @@ class TestProtectedEndpointsWithoutToken:
     """Write endpoints should return 401 when no valid JWT token is provided."""
 
     def test_articles_post_requires_auth(self):
-        # Create app WITHOUT dependency override — no authenticated user
-        from backend.main import create_app
         app = create_app()
         client = TestClient(app)
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            resp = client.post("/api/v1/articles", json={
-                "title": "Test", "source_id": str(uuid.uuid4()),
-            })
+        resp = client.post("/api/v1/articles", json={
+            "title": "Test", "source_id": str(uuid.uuid4()),
+        })
         assert resp.status_code == 401
         client.close()
 
     def test_tasks_post_requires_auth(self):
-        from backend.main import create_app
         app = create_app()
         client = TestClient(app)
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            resp = client.post("/api/v1/tasks", json={"title": "Test"})
+        resp = client.post("/api/v1/tasks", json={"title": "Test"})
         assert resp.status_code == 401
         client.close()
 
     def test_knowledge_post_requires_auth(self):
-        from backend.main import create_app
         app = create_app()
         client = TestClient(app)
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            resp = client.post("/api/v1/knowledge", json={
-                "title": "Test", "content": "Data", "kind": "note",
-            })
+        resp = client.post("/api/v1/knowledge", json={
+            "title": "Test", "content": "Data", "kind": "note",
+        })
         assert resp.status_code == 401
         client.close()
 
     def test_reports_post_requires_auth(self):
-        from backend.main import create_app
         app = create_app()
         client = TestClient(app)
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            resp = client.post("/api/v1/reports", json={
-                "title": "Test", "body": "Body",
-            })
+        resp = client.post("/api/v1/reports", json={
+            "title": "Test", "body": "Body",
+        })
         assert resp.status_code == 401
         client.close()
 
     def test_agents_run_requires_auth(self):
-        from backend.main import create_app
         app = create_app()
         client = TestClient(app)
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            resp = client.post(f"/api/v1/agents/{uuid.uuid4()}/run")
+        resp = client.post(f"/api/v1/agents/{uuid.uuid4()}/run")
         assert resp.status_code == 401
         client.close()
 
@@ -169,52 +154,72 @@ class TestProtectedEndpointsWithValidToken:
 
     def test_articles_post_with_token(self):
         client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.articles.ArticleService", ProtectedTrackingService):
-                resp = client.post(
-                    "/api/v1/articles",
-                    json={"title": "Test", "source_id": str(uuid.uuid4())},
-                )
+        from backend.routers.deps import get_article_service
+
+        def make_mock():
+            return ProtectedTrackingService(None)
+
+        app.dependency_overrides[get_article_service] = make_mock
+        resp = client.post(
+            "/api/v1/articles",
+            json={"title": "Test", "source_id": str(uuid.uuid4())},
+        )
         assert resp.status_code == 200
         assert resp.json()["data"]["title"] == "Created"
         app.dependency_overrides.clear()
 
     def test_tasks_post_with_token(self):
         client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.tasks.TaskService", ProtectedTrackingService):
-                resp = client.post("/api/v1/tasks", json={"title": "Test"})
+        from backend.routers.deps import get_task_service
+
+        def make_mock():
+            return ProtectedTrackingService(None)
+
+        app.dependency_overrides[get_task_service] = make_mock
+        resp = client.post("/api/v1/tasks", json={"title": "Test"})
         assert resp.status_code == 200
         assert resp.json()["data"]["title"] == "New Task"
         app.dependency_overrides.clear()
 
     def test_knowledge_post_with_token(self):
         client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.knowledge.KnowledgeItemService", ProtectedTrackingService):
-                resp = client.post(
-                    "/api/v1/knowledge",
-                    json={"title": "Test", "content": "Data", "kind": "note"},
-                )
+        from backend.routers.deps import get_knowledge_service
+
+        def make_mock():
+            return ProtectedTrackingService(None)
+
+        app.dependency_overrides[get_knowledge_service] = make_mock
+        resp = client.post(
+            "/api/v1/knowledge",
+            json={"title": "Test", "content": "Data", "kind": "note"},
+        )
         assert resp.status_code == 200
         app.dependency_overrides.clear()
 
     def test_reports_post_with_token(self):
         client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.reports.ReportService", ProtectedTrackingService):
-                resp = client.post(
-                    "/api/v1/reports",
-                    json={"title": "Test", "body": "Body"},
-                )
+        from backend.routers.deps import get_report_service
+
+        def make_mock():
+            return ProtectedTrackingService(None)
+
+        app.dependency_overrides[get_report_service] = make_mock
+        resp = client.post(
+            "/api/v1/reports",
+            json={"title": "Test", "body": "Body"},
+        )
         assert resp.status_code == 200
         app.dependency_overrides.clear()
 
     def test_agents_run_with_token(self):
         client, app = _make_client()
-        with patch("backend.routers.deps.get_session_factory", lambda: FakeSessionCtx()):
-            with patch("backend.routers.agents.AgentRuntimeService", ProtectedTrackingService):
-                resp = client.post(f"/api/v1/agents/{uuid.uuid4()}/run")
+        from backend.routers.deps import get_runtime_service_with_event_pub
+
+        def make_mock():
+            return ProtectedTrackingService(None)
+
+        app.dependency_overrides[get_runtime_service_with_event_pub] = make_mock
+        resp = client.post(f"/api/v1/agents/{uuid.uuid4()}/run")
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "running"
         app.dependency_overrides.clear()

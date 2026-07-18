@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from ..schemas.error import ErrorResponse
 from ..schemas.response import APIResponse
 from ..schemas.user import TokenResponse, UserCreate, UserLogin, UserResponse
-from .deps import get_current_user, get_db
+from .deps import get_current_user, get_user_service
 from ..config import get_settings
 from ..rate_limiter import limiter
 
@@ -18,6 +18,7 @@ def _login_rate_limit():
     """Return rate limit string from settings."""
     s = get_settings()
     return f"{s.rate_limit_login_requests} per {s.rate_limit_login_window_seconds} seconds"
+
 
 router = APIRouter(
     prefix="/auth",
@@ -43,14 +44,7 @@ router = APIRouter(
     status_code=status.HTTP_201_CREATED,
 )
 @limiter.limit(_login_rate_limit())
-async def register(data: UserCreate, request: Request, db=Depends(get_db)):
-    # Read from services module so patch() works in tests
-    svc_mod = __import__("sys").modules.get("backend.services.user_service")
-    if svc_mod is None:
-        from ..services.user_service import UserService as UserServiceCls
-    else:
-        UserServiceCls = getattr(svc_mod, "UserService")
-    service = UserServiceCls(db)
+async def register(data: UserCreate, request: Request, service: UserService = Depends(get_user_service)):
     try:
         user = await service.register(data)
     except ValueError as exc:
@@ -66,21 +60,13 @@ async def register(data: UserCreate, request: Request, db=Depends(get_db)):
     response_model=APIResponse[TokenResponse],
 )
 @limiter.limit(_login_rate_limit())
-async def login(data: UserLogin, request: Request, db=Depends(get_db)):
-    # Read from services module so patch() works in tests
-    svc_mod = __import__("sys").modules.get("backend.services.user_service")
-    if svc_mod is None:
-        from ..services.user_service import UserService as UserServiceCls
-    else:
-        UserServiceCls = getattr(svc_mod, "UserService")
-    service = UserServiceCls(db)
+async def login(data: UserLogin, request: Request, service: UserService = Depends(get_user_service)):
     user = await service.authenticate(data)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
-    from ..config import get_settings
     from ..utils.jwt import create_access_token
 
     settings = get_settings()
@@ -95,11 +81,8 @@ async def login(data: UserLogin, request: Request, db=Depends(get_db)):
     operation_id="getCurrentUser",
     response_model=APIResponse[UserResponse],
 )
-async def get_me(current_user: Any = Depends(get_current_user), db=Depends(get_db)):
+async def get_me(current_user: Any = Depends(get_current_user), service: UserService = Depends(get_user_service)):
     """Protected endpoint — requires valid JWT."""
-    from ..services.user_service import UserService
-
-    service = UserService(db)
     user = await service.get_user(current_user.id)
     if user is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")

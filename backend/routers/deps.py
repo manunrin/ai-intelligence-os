@@ -4,14 +4,22 @@ from __future__ import annotations
 
 import logging
 from collections.abc import AsyncGenerator
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from unittest.mock import AsyncMock, MagicMock
 
 from ..config import Settings, get_settings
-from ..repositories.user_repository import UserRepository
+
+if TYPE_CHECKING:
+    from ..repositories.user_repository import UserRepository
+    from ..services.agent_runtime_service import AgentRuntimeService
+    from ..services.article_service import ArticleService
+    from ..services.knowledge_service import KnowledgeItemService
+    from ..services.report_service import ReportService
+    from ..services.task_service import TaskService
+    from ..services.user_service import UserService
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +111,8 @@ async def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    from ..repositories.user_repository import UserRepository
+
     repo = UserRepository(db)
     user = await repo.get_by_id(user_id)
     if user is None:
@@ -133,6 +143,61 @@ def require_role(*roles: str):
         return current_user
 
     return _check_role
+
+
+# ── Service factories ─────────────────────────────────────────────────
+
+def get_task_service(db=Depends(get_db)) -> "TaskService":
+    """Dependency: create TaskService bound to request session."""
+    from ..services.task_service import TaskService
+    return TaskService(db)
+
+
+def get_article_service(db=Depends(get_db)) -> "ArticleService":
+    """Dependency: create ArticleService bound to request session."""
+    from ..services.article_service import ArticleService
+    return ArticleService(db)
+
+
+def get_knowledge_service(db=Depends(get_db)) -> "KnowledgeItemService":
+    """Dependency: create KnowledgeItemService bound to request session."""
+    from ..services.knowledge_service import KnowledgeItemService
+    return KnowledgeItemService(db)
+
+
+def get_report_service(db=Depends(get_db)) -> "ReportService":
+    """Dependency: create ReportService bound to request session."""
+    from ..services.report_service import ReportService
+    return ReportService(db)
+
+
+def get_user_service(db=Depends(get_db)) -> "UserService":  # noqa: F821
+    """Dependency: create UserService bound to request session."""
+    from ..services.user_service import UserService
+    return UserService(db)
+
+
+def get_runtime_service(
+    db=Depends(get_db),
+    request: Request = None,
+) -> "AgentRuntimeService":
+    """Dependency: create runtime service bound to request session with factory for bg tasks."""
+    from ..services.agent_runtime_service import AgentRuntimeService
+    sf = None
+    if request is not None:
+        sf = getattr(request.app.state, 'session_factory', None)
+    return AgentRuntimeService(db, session_factory=sf)
+
+
+def get_runtime_service_with_event_pub(
+    db=Depends(get_db),
+    request: Request = None,
+) -> "AgentRuntimeService":
+    """Dependency: runtime service with event publisher for audit logging."""
+    svc = get_runtime_service(db=db, request=request)
+    if request is not None and hasattr(request.app.state, 'event_publisher'):
+        svc._event_publisher = request.app.state.event_publisher
+    return svc
 
 
 # ── Compatibility shim ────────────────────────────────────────────────

@@ -10,17 +10,9 @@ from ..schemas.error import ErrorResponse
 from ..schemas.report import IntelligenceReportResponse
 from ..schemas.report_create import ReportCreate
 from ..schemas.response import APIResponse
-from .deps import get_current_user, get_db
+from .deps import get_current_user, get_report_service
 from .pagination import PaginationParams, get_pagination
 from ..services.report_service import ReportService
-
-
-def _make_report_service(db, request):
-    import sys
-    mod = sys.modules[__name__]
-    cls = getattr(mod, "ReportService", ReportService)
-    return cls(db)
-
 
 router = APIRouter(
     prefix="/reports",
@@ -45,12 +37,10 @@ router = APIRouter(
     response_model=APIResponse[list[IntelligenceReportResponse]],
 )
 async def list_reports(
-    request: Request,
     pagination: PaginationParams = Depends(get_pagination),
     current_user: Any = Depends(get_current_user),
-    db=Depends(get_db),
+    service: ReportService = Depends(get_report_service),
 ):
-    service = _make_report_service(db, request)
     reports = await service.list_reports(
         offset=pagination.offset, limit=pagination.limit, user_id=current_user.id
     )
@@ -65,12 +55,10 @@ async def list_reports(
     response_model=APIResponse[IntelligenceReportResponse],
 )
 async def get_report(
-    request: Request,
     report_id: str,
     current_user: Any = Depends(get_current_user),
-    db=Depends(get_db),
+    service: ReportService = Depends(get_report_service),
 ):
-    service = _make_report_service(db, request)
     report = await service.get_report(report_id, user_id=current_user.id)
     if report is None:
         raise HTTPException(status_code=404, detail="Report not found")
@@ -85,11 +73,9 @@ async def get_report(
     response_model=APIResponse[IntelligenceReportResponse],
 )
 async def create_report(
-    request: Request,
     data: ReportCreate,
     current_user: Any = Depends(get_current_user),
-    db=Depends(get_db),
+    service: ReportService = Depends(get_report_service),
 ):
-    service = _make_report_service(db, request)
     report = await service.create_report(data, user_id=current_user.id)
     return APIResponse(success=True, data=report, error=None)
