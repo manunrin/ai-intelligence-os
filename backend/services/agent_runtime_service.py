@@ -181,13 +181,15 @@ class AgentRuntimeService:
 
         # Publish audit event for the run creation
         try:
-            from ..events.event import AuditAction, AuditLogEvent
+            from ..context_vars import ip_address as _ip_ctx, user_agent as _ua_ctx
             if hasattr(self, '_event_publisher') and self._event_publisher is not None:
                 await self._event_publisher.publish(AuditLogEvent(
                     action=AuditAction.AGENT_RUN,
                     resource_type="agent_run",
                     metadata={"run_id": str(run_id), "agent_type": agent_type},
                     user_id=user_id,
+                    ip_address=_ip_ctx.get(),
+                    user_agent=_ua_ctx.get(),
                 ))
         except Exception:
             logger.warning("Failed to publish audit event for run %s", str(run_id), exc_info=True)

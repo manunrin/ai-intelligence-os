@@ -97,11 +97,14 @@ class TaskService:
         if self._publisher is None:
             return
         try:
+            from ..context_vars import ip_address as _ip_ctx, user_agent as _ua_ctx
             await self._publisher.publish(AuditLogEvent(
                 action=action,
                 resource_type="task",
                 resource_id=uuid.UUID(resource_id),
                 user_id=user_id,
+                ip_address=_ip_ctx.get(),
+                user_agent=_ua_ctx.get(),
                 metadata={"resource_id": resource_id},
             ))
         except Exception:

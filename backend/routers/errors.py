@@ -46,10 +46,15 @@ def setup_middleware(app: FastAPI) -> None:
 
     class LogMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next) -> JSONResponse:
+            from ..context_vars import ip_address as _ip_ctx, user_agent as _ua_ctx
+
             request_id = request.headers.get(
                 "X-Request-ID", str(uuid.uuid4())
             )
             request.state.request_id = request_id
+
+            _ip_ctx.set(request.headers.get("x-forwarded-for"))
+            _ua_ctx.set(request.headers.get("user-agent"))
 
             start = time.monotonic()
             response = await call_next(request)

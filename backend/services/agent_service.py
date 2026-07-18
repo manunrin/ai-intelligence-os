@@ -68,11 +68,14 @@ class AgentService:
         if self._publisher is None:
             return
         try:
+            from ..context_vars import ip_address as _ip_ctx, user_agent as _ua_ctx
             await self._publisher.publish(AuditLogEvent(
                 action=action,
                 resource_type="agent_run",
                 metadata={"run_id": resource_id, "agent_id": resource_id},
                 user_id=user_id,
+                ip_address=_ip_ctx.get(),
+                user_agent=_ua_ctx.get(),
             ))
         except Exception:
             logger.error("Failed to publish audit event for %s agent_run %s", action.value, resource_id, exc_info=True)
