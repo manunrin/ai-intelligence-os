@@ -47,6 +47,9 @@ ps:             ## Show service status
 test:           ## Run backend tests
 	$(COMPOSE) exec backend pytest
 
+test-frontend:  ## Run frontend tests
+	cd frontend && npm test
+
 test-unit:      ## Run backend unit tests only
 	$(COMPOSE) exec backend pytest tests/unit/ -v
 
