@@ -26,7 +26,7 @@ from ..repositories.agent_run_repository import AgentRunRepository
 from ..repositories.agent_stage_progress_repository import AgentStageProgressRepository
 from ..workflows.executor import Executor, PipelineFactory, RunResult, SyncExecutor
 from ..workflows.registry import PIPELINE_REGISTRY
-from ..context_vars import agent_run_id as _agent_ctx
+from ..context_vars import agent_run_id as _agent_ctx, trace_span as _trace_ctx
 from ..metrics import counter, histogram
 
 logger = logging.getLogger(__name__)
@@ -223,6 +223,7 @@ class AgentRuntimeService:
         timeout_seconds: int,
     ) -> None:
         """Execute a run in the background with its own DB session."""
+        from ..trace import start_span
         from ..workflows.graph.callbacks import AgentRuntimeCallback
 
         # Create a dedicated session for this background task
@@ -232,60 +233,65 @@ class AgentRuntimeService:
 
         repo, stage_repo = _make_repo(session)
 
-        try:
-            graph_builder = PIPELINE_REGISTRY[pipeline_type]
+        # Start agent run span — inherits parent HTTP span from context vars
+        with start_span(f"agent_run.{pipeline_type}", attributes={
+            "agent.run.id": str(run_id),
+            "agent.type": pipeline_type,
+        }) as run_span:
+            try:
+                graph_builder = PIPELINE_REGISTRY[pipeline_type]
 
-            def factory():
-                return graph_builder()
+                def factory():
+                    return graph_builder()
 
-            result = await asyncio.wait_for(
-                self._executor.execute(
+                result = await asyncio.wait_for(
+                    self._executor.execute(
+                        run_id=run_id,
+                        factory=factory,
+                        state=state,
+                        user_id=state.get("user_id") if isinstance(state.get("user_id"), uuid.UUID) else None or run_id,
+                        session=session,
+                        cancellation_token=self._cancellation_tokens,
+                    ),
+                    timeout=timeout_seconds,
+                )
+
+                # Record agent run completion metric with stage info
+                counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": result.status})
+                if result.duration_ms is not None:
+                    histogram("agent_run_duration_seconds", result.duration_ms / 1000.0, labels={"agent_type": pipeline_type, "status": result.status})
+
+                if result.status == "cancelled":
+                    await self._finalize_cancelled(repo, run_id, result)
+                elif result.status in ("completed", "failed"):
+                    await self._finalize_completed(repo, stage_repo, run_id, result, callback.events)
+                else:
+                    # Any other status (e.g., timeout from executor itself)
+                    logger.warning("Run %s ended with unexpected status: %s", str(run_id), result.status)
+
+            except asyncio.TimeoutError:
+                logger.warning("Run %s exceeded %ds timeout", str(run_id), timeout_seconds)
+                await self._finalize_failed(repo, run_id, RunResult(
+                    status="timeout",
                     run_id=run_id,
-                    factory=factory,
-                    state=state,
-                    user_id=state.get("user_id") if isinstance(state.get("user_id"), uuid.UUID) else None or run_id,
-                    session=session,
-                    cancellation_token=self._cancellation_tokens,
-                ),
-                timeout=timeout_seconds,
-            )
+                    error_message=f"Run exceeded {timeout_seconds}s timeout",
+                ))
+                counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": "timeout"})
 
-            # Record agent run completion metric with stage info
-            counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": result.status})
-            if result.duration_ms is not None:
-                histogram("agent_run_duration_seconds", result.duration_ms / 1000.0, labels={"agent_type": pipeline_type, "status": result.status})
+            except Exception as exc:
+                logger.exception("Unexpected error in run %s", str(run_id))
+                await self._finalize_failed(repo, run_id, RunResult(
+                    status="failed",
+                    run_id=run_id,
+                    error_message=str(exc),
+                ))
+                counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": "error"})
 
-            if result.status == "cancelled":
-                await self._finalize_cancelled(repo, run_id, result)
-            elif result.status in ("completed", "failed"):
-                await self._finalize_completed(repo, stage_repo, run_id, result, callback.events)
-            else:
-                # Any other status (e.g., timeout from executor itself)
-                logger.warning("Run %s ended with unexpected status: %s", str(run_id), result.status)
-
-        except asyncio.TimeoutError:
-            logger.warning("Run %s exceeded %ds timeout", str(run_id), timeout_seconds)
-            await self._finalize_failed(repo, run_id, RunResult(
-                status="timeout",
-                run_id=run_id,
-                error_message=f"Run exceeded {timeout_seconds}s timeout",
-            ))
-            counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": "timeout"})
-
-        except Exception as exc:
-            logger.exception("Unexpected error in run %s", str(run_id))
-            await self._finalize_failed(repo, run_id, RunResult(
-                status="failed",
-                run_id=run_id,
-                error_message=str(exc),
-            ))
-            counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": "error"})
-
-        finally:
-            self._cancellation_tokens.pop(run_id, None)
-            self._run_tasks.pop(run_id, None)
-            _agent_ctx.set(None)
-            await session.close()
+            finally:
+                self._cancellation_tokens.pop(run_id, None)
+                self._run_tasks.pop(run_id, None)
+                _agent_ctx.set(None)
+                await session.close()
 
     async def _finalize_completed(
         self,

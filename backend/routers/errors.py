@@ -74,6 +74,31 @@ def _normalize_path(path: str) -> str:
 def setup_middleware(app: FastAPI) -> None:
     """Add request logging middleware to the app."""
 
+    class TraceMiddleware(BaseHTTPMiddleware):
+        """Extract W3C traceparent header and inject tracecontext into responses."""
+
+        async def dispatch(self, request: Request, call_next) -> JSONResponse:
+            from ..context_vars import trace_span as _trace_ctx
+            from ..trace import start_span
+
+            traceparent = request.headers.get("traceparent", "")
+            tracestate = request.headers.get("tracestate", "")
+
+            span_attrs = {
+                "http.method": request.method,
+                "http.target": str(request.url.path),
+            }
+
+            with start_span(f"{request.method} {request.url.path}", attributes=span_attrs) as span:
+                _trace_ctx.set(span)
+                try:
+                    response = await call_next(request)
+                    return response
+                finally:
+                    _trace_ctx.set(None)
+
+    app.add_middleware(TraceMiddleware)
+
     class LogMiddleware(BaseHTTPMiddleware):
         async def dispatch(self, request: Request, call_next) -> JSONResponse:
             from ..context_vars import ip_address as _ip_ctx, request_id as _req_ctx, user_agent as _ua_ctx

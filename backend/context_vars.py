@@ -8,3 +8,4 @@ ip_address: contextvars.ContextVar[str | None] = contextvars.ContextVar("ip_addr
 user_agent: contextvars.ContextVar[str | None] = contextvars.ContextVar("user_agent", default=None)
 request_id: contextvars.ContextVar[str] = contextvars.ContextVar("request_id", default="unknown")
 agent_run_id: contextvars.ContextVar[str | None] = contextvars.ContextVar("agent_run_id", default=None)
+trace_span: contextvars.ContextVar[object | None] = contextvars.ContextVar("trace_span", default=None)

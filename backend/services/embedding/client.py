@@ -6,6 +6,7 @@ import logging
 import time as _time
 
 from ...metrics import counter, histogram
+from ...trace import start_span
 from .base import EmbeddingProvider, EmbeddingResult
 
 logger = logging.getLogger(__name__)
@@ -21,27 +22,21 @@ class EmbeddingClient:
         self._provider = provider
 
     async def embed(self, text: str, model: str | None = None) -> EmbeddingResult:
-        """Generate embedding for a single text string.
-
-        Args:
-            text: Input text.
-            model: Optional model override.
-
-        Returns:
-            EmbeddingResult with vector and metadata.
-        """
-        start = _time.monotonic()
-        try:
-            result = await self._provider.embed(text, model=model)
-            elapsed = _time.monotonic() - start
-            counter("embedding_requests_total", labels={"model": model or "default", "status": "success"})
-            histogram("embedding_request_duration_seconds", elapsed, labels={"model": model or "default", "status": "success"})
-            return result
-        except Exception as exc:
-            elapsed = _time.monotonic() - start
-            counter("embedding_requests_total", labels={"model": model or "default", "status": "failed"})
-            histogram("embedding_request_duration_seconds", elapsed, labels={"model": model or "default", "status": "failed"})
-            raise
+        """Generate embedding for a single text string."""
+        model_label = model or "default"
+        with start_span("embedding", attributes={"llm.request.model": model_label}):
+            start = _time.monotonic()
+            try:
+                result = await self._provider.embed(text, model=model)
+                elapsed = _time.monotonic() - start
+                counter("embedding_requests_total", labels={"model": model_label, "status": "success"})
+                histogram("embedding_request_duration_seconds", elapsed, labels={"model": model_label, "status": "success"})
+                return result
+            except Exception as exc:
+                elapsed = _time.monotonic() - start
+                counter("embedding_requests_total", labels={"model": model_label, "status": "failed"})
+                histogram("embedding_request_duration_seconds", elapsed, labels={"model": model_label, "status": "failed"})
+                raise
 
     async def embed_batch(self, texts: list[str], model: str | None = None) -> list[EmbeddingResult]:
         """Generate embeddings for multiple texts.

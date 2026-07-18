@@ -10,6 +10,7 @@ import yaml
 
 from ...config import get_settings
 from ...metrics import counter, histogram
+from ...trace import set_attr, start_span
 from .base import ChatMessage, ChatResponse, EmbeddingResponse, LLMProvider
 from .providers.anthropic import AnthropicProvider
 from .providers.compatible import CompatibleProvider
@@ -186,34 +187,42 @@ class LLMRouter:
         result_status = "failed"
         response = None
 
-        # Try primary
-        try:
-            response = await primary_provider.chat(messages, model=primary_model, **kwargs)
-            result_status = "success"
-            final_provider = primary_provider.name
-            final_model = primary_model
-        except Exception as exc:
-            logger.warning("Primary provider '%s' failed: %s", primary_provider.name, exc)
+        with start_span("llm.chat", attributes={
+            "llm.system": primary_provider.name,
+            "llm.request.model": primary_model,
+        }) as span:
+            # Try primary
+            try:
+                response = await primary_provider.chat(messages, model=primary_model, **kwargs)
+                result_status = "success"
+                final_provider = primary_provider.name
+                final_model = primary_model
+                set_attr(span, "llm.response.model", primary_model)
+            except Exception as exc:
+                logger.warning("Primary provider '%s' failed: %s", primary_provider.name, exc)
+                set_attr(span, "error.type", type(exc).__name__)
 
-        # Try fallbacks
-        if response is None:
-            for fallback_name, fallback_model in fallback_chain:
-                fallback_provider = self._providers.get(fallback_name)
-                if fallback_provider is None:
-                    continue
-                try:
-                    logger.info("Falling back to provider '%s'", fallback_name)
-                    response = await fallback_provider.chat(messages, model=fallback_model, **kwargs)
-                    result_status = "success"
-                    final_provider = fallback_name
-                    final_model = fallback_model
-                    break
-                except Exception as fb_exc:
-                    logger.warning("Fallback provider '%s' also failed: %s", fallback_name, fb_exc)
+            # Try fallbacks
+            if response is None:
+                for fallback_name, fallback_model in fallback_chain:
+                    fallback_provider = self._providers.get(fallback_name)
+                    if fallback_provider is None:
+                        continue
+                    try:
+                        logger.info("Falling back to provider '%s'", fallback_name)
+                        response = await fallback_provider.chat(messages, model=fallback_model, **kwargs)
+                        result_status = "success"
+                        final_provider = fallback_name
+                        final_model = fallback_model
+                        set_attr(span, "llm.fallback.used", True)
+                        set_attr(span, "llm.fallback.provider", fallback_name)
+                        break
+                    except Exception as fb_exc:
+                        logger.warning("Fallback provider '%s' also failed: %s", fallback_name, fb_exc)
 
-        elapsed = _time.monotonic() - start
-        counter("llm_requests_total", labels={"provider": final_provider, "model": final_model, "status": result_status})
-        histogram("llm_request_duration_seconds", elapsed, labels={"provider": final_provider, "model": final_model, "status": result_status})
+            elapsed = _time.monotonic() - start
+            counter("llm_requests_total", labels={"provider": final_provider, "model": final_model, "status": result_status})
+            histogram("llm_request_duration_seconds", elapsed, labels={"provider": final_provider, "model": final_model, "status": result_status})
 
         if response is not None:
             return response

@@ -5,6 +5,7 @@ Observability configuration for the AI Intelligence OS platform.
 ## Components
 
 - **Prometheus** — Metrics collection with labeled counters/histograms
+- **OpenTelemetry** — Distributed tracing (optional, degrades gracefully when SDK absent)
 - **Structured JSON logging** — Request-scoped log correlation via `request_id`
 - **Frontend observability** — Client-side API latency and agent stream tracking
 
@@ -78,6 +79,33 @@ All backend histograms use configurable bucket boundaries. Default Prometheus st
 ```
 
 Custom buckets can be passed via `histogram(name, value, buckets=(...))`. Output follows Prometheus text format with `_bucket{le="..."}` cumulative lines plus `_count`, `_sum`, and `_bucket{le="+Inf"}`.
+
+## Distributed Tracing
+
+When `opentelemetry-api` and `opentelemetry-sdk` are installed, spans are created automatically. When absent, all calls become no-ops — metrics continue working normally.
+
+### Trace Context Propagation
+
+| Component | Detail |
+|-----------|--------|
+| Header extraction | W3C `traceparent` / `tracestate` from incoming requests |
+| Context propagation | `contextvars.ContextVar` carries span reference across async boundaries |
+| Root span | `TraceMiddleware` starts a root span per HTTP request |
+| Agent runs | `_execute_run` wraps execution in an `agent_run.{pipeline_type}` span |
+| LLM calls | `_execute_with_fallback` creates `llm.chat` span with provider/model attributes |
+| Embeddings | `EmbeddingClient.embed()` creates `embedding` span |
+| Vector ops | `QdrantVectorService` creates `vector.upsert` / `vector.search` spans |
+
+### Span Attributes
+
+| Span Name | Attributes |
+|-----------|-----------|
+| `{METHOD} {path}` | `http.method`, `http.target` |
+| `agent_run.{pipeline_type}` | `agent.run.id`, `agent.type` |
+| `llm.chat` | `llm.system`, `llm.request.model`, `llm.response.model`, `llm.fallback.used`, `llm.fallback.provider`, `error.type` |
+| `embedding` | `llm.request.model` |
+| `vector.upsert` | `db.system`, `db.collection` |
+| `vector.search` | `db.system`, `db.collection`, `db.query.limit` |
 
 ## Logging
 

@@ -10,6 +10,7 @@ from uuid import UUID
 import httpx
 
 from ...metrics import counter, histogram
+from ...trace import start_span
 
 logger = logging.getLogger(__name__)
 
@@ -78,32 +79,32 @@ class QdrantVectorService:
         logger.info("Created Qdrant collection '%s' (%d-dim)", self._collection, self._vector_size)
 
     async def upsert(self, points: list[QdrantPoint]) -> None:
-        """Upsert multiple points into the collection.
-
-        Args:
-            points: List of QdrantPoint instances.
-        """
+        """Upsert multiple points into the collection."""
         if not points:
             return
-        start = _time.monotonic()
-        try:
-            payloads = [
-                {"id": p.id, "vector": p.vector, "payload": p.payload}
-                for p in points
-            ]
-            await self._client.post(
-                f"/collections/{self._collection}/points",
-                json={"points": payloads},
-            )
-            elapsed = _time.monotonic() - start
-            counter("vector_operations_total", labels={"operation": "upsert", "status": "success"})
-            histogram("vector_operation_duration_seconds", elapsed, labels={"operation": "upsert", "status": "success"})
-            logger.info("Upserted %d points into '%s'", len(points), self._collection)
-        except Exception as exc:
-            elapsed = _time.monotonic() - start
-            counter("vector_operations_total", labels={"operation": "upsert", "status": "failed"})
-            histogram("vector_operation_duration_seconds", elapsed, labels={"operation": "upsert", "status": "failed"})
-            raise
+        with start_span("vector.upsert", attributes={
+            "db.system": "qdrant",
+            "db.collection": self._collection,
+        }) as span:
+            start = _time.monotonic()
+            try:
+                payloads = [
+                    {"id": p.id, "vector": p.vector, "payload": p.payload}
+                    for p in points
+                ]
+                await self._client.post(
+                    f"/collections/{self._collection}/points",
+                    json={"points": payloads},
+                )
+                elapsed = _time.monotonic() - start
+                counter("vector_operations_total", labels={"operation": "upsert", "status": "success"})
+                histogram("vector_operation_duration_seconds", elapsed, labels={"operation": "upsert", "status": "success"})
+                logger.info("Upserted %d points into '%s'", len(points), self._collection)
+            except Exception as exc:
+                elapsed = _time.monotonic() - start
+                counter("vector_operations_total", labels={"operation": "upsert", "status": "failed"})
+                histogram("vector_operation_duration_seconds", elapsed, labels={"operation": "upsert", "status": "failed"})
+                raise
 
     async def search(
         self,
@@ -112,50 +113,45 @@ class QdrantVectorService:
         score_threshold: float | None = None,
         filter: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        """Semantic search by vector.
+        """Semantic search by vector."""
+        with start_span("vector.search", attributes={
+            "db.system": "qdrant",
+            "db.collection": self._collection,
+            "db.query.limit": str(limit),
+        }) as span:
+            start = _time.monotonic()
+            try:
+                params: dict[str, Any] = {
+                    "limit": limit,
+                }
+                if score_threshold is not None:
+                    params["score_threshold"] = score_threshold
+                body: dict[str, Any] = {"vector": query_vector, "with_payload": True}
+                if filter:
+                    body["filter"] = filter
 
-        Args:
-            query_vector: Embedding vector to search against.
-            limit: Maximum results to return.
-            score_threshold: Minimum similarity score.
-            filter: Optional Qdrant filter expression.
-
-        Returns:
-            List of result dicts with keys: id, score, payload.
-        """
-        start = _time.monotonic()
-        try:
-            params: dict[str, Any] = {
-                "limit": limit,
-            }
-            if score_threshold is not None:
-                params["score_threshold"] = score_threshold
-            body: dict[str, Any] = {"vector": query_vector, "with_payload": True}
-            if filter:
-                body["filter"] = filter
-
-            resp = await self._client.post(
-                f"/collections/{self._collection}/points/search",
-                params=params,
-                json=body,
-            )
-            data = resp.json()
-            results: list[dict[str, Any]] = []
-            for hit in data.get("result", []):
-                results.append({
-                    "id": hit.get("id"),
-                    "score": hit.get("score"),
-                    "payload": hit.get("payload", {}),
-                })
-            elapsed = _time.monotonic() - start
-            counter("vector_search_total", labels={"status": "success"})
-            histogram("vector_search_duration_seconds", elapsed, labels={"status": "success"})
-            return results
-        except Exception as exc:
-            elapsed = _time.monotonic() - start
-            counter("vector_search_total", labels={"status": "failed"})
-            histogram("vector_search_duration_seconds", elapsed, labels={"status": "failed"})
-            raise
+                resp = await self._client.post(
+                    f"/collections/{self._collection}/points/search",
+                    params=params,
+                    json=body,
+                )
+                data = resp.json()
+                results: list[dict[str, Any]] = []
+                for hit in data.get("result", []):
+                    results.append({
+                        "id": hit.get("id"),
+                        "score": hit.get("score"),
+                        "payload": hit.get("payload", {}),
+                    })
+                elapsed = _time.monotonic() - start
+                counter("vector_search_total", labels={"status": "success"})
+                histogram("vector_search_duration_seconds", elapsed, labels={"status": "success"})
+                return results
+            except Exception as exc:
+                elapsed = _time.monotonic() - start
+                counter("vector_search_total", labels={"status": "failed"})
+                histogram("vector_search_duration_seconds", elapsed, labels={"status": "failed"})
+                raise
 
     async def delete(self, point_ids: list[str | UUID]) -> None:
         """Delete specific points by ID.
