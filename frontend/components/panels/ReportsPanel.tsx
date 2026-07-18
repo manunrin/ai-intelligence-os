@@ -29,18 +29,7 @@ export function ReportsPanel({ reports, onCreate }: ReportsPanelProps) {
               footer={<div className="text-xs text-slate-400">Created: {new Date(report.created_at).toLocaleString()}</div>}
             >
               <div className="space-y-2 text-sm">
-                {report.research_result && (
-                  <div><span className="font-medium text-slate-700 dark:text-slate-300">Research: </span><span className="text-slate-500">{typeof report.research_result === "object" ? JSON.stringify(report.research_result).slice(0, 200) : String(report.research_result)}</span></div>
-                )}
-                {report.analysis_result && (
-                  <div><span className="font-medium text-slate-700 dark:text-slate-300">Analysis: </span><span className="text-slate-500">{typeof report.analysis_result === "object" ? JSON.stringify(report.analysis_result).slice(0, 200) : String(report.analysis_result)}</span></div>
-                )}
-                {report.knowledge_items.length > 0 && (
-                  <div><span className="font-medium text-slate-700 dark:text-slate-300">Knowledge: {report.knowledge_items.length} items</span></div>
-                )}
-                {report.tasks.length > 0 && (
-                  <div><span className="font-medium text-slate-700 dark:text-slate-300">Tasks: {report.tasks.length} generated</span></div>
-                )}
+                <p className="text-slate-500">Report created successfully.</p>
               </div>
             </Card>
           ))}

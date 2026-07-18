@@ -81,11 +81,6 @@ class ReportService:
         return {
             "id": str(report.id),
             "topic": report.title,
-            "research_result": None,
-            "analysis_result": None,
-            "translation_result": None,
-            "knowledge_items": [],
-            "tasks": [],
             "created_at": report.created_at.isoformat() if report.created_at else None,
             "user_id": str(report.user_id) if report.user_id else None,
         }

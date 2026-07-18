@@ -59,11 +59,6 @@ export interface AgentInfo {
 export type IntelligenceReport = {
   id: string;
   topic: string;
-  research_result: Record<string, unknown> | null;
-  analysis_result: Record<string, unknown> | null;
-  translation_result: Record<string, unknown> | null;
-  knowledge_items: Array<Record<string, unknown>>;
-  tasks: Array<Record<string, unknown>>;
   created_at: string;
   user_id: string | null;
 };
