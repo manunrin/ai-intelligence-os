@@ -55,6 +55,22 @@ def register_exception_handlers(app: FastAPI) -> None:
         )
 
 
+def _normalize_path(path: str) -> str:
+    """Replace UUID-like path segments with <uuid> to prevent cardinality explosion.
+
+    E.g. /api/v1/agents/runs/550e8400-e29b-41d4-a716-446655440000/stream
+         → /api/v1/agents/runs/<uuid>/stream
+    """
+    import re
+
+    # Match UUIDs (with or without hyphens) in path segments
+    return re.sub(
+        r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+        "<uuid>",
+        path,
+    )
+
+
 def setup_middleware(app: FastAPI) -> None:
     """Add request logging middleware to the app."""
 
@@ -80,8 +96,7 @@ def setup_middleware(app: FastAPI) -> None:
 
             status_str = str(response.status_code)
             method_str = request.method
-            # Normalize path: strip UUID run IDs for cleaner labels
-            path_str = str(request.url.path)
+            path_str = _normalize_path(str(request.url.path))
 
             counter("http_requests_total", labels={"method": method_str, "status": status_str, "path": path_str})
             histogram("http_request_duration_seconds", elapsed, labels={"method": method_str, "status": status_str, "path": path_str})

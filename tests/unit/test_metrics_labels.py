@@ -28,7 +28,7 @@ class TestLabeledCounter:
         assert 'api_calls_total{endpoint="/users",method="GET"} 1' in out
         assert 'api_calls_total{endpoint="/users",method="POST"} 1' in out
 
-    def test_label_order_ignored(self):
+    def test_label_order_independent(self):
         """Label dict order does not affect bucket identity."""
         reset()
         counter("reqs", labels={"a": "1", "b": "2"})
@@ -38,7 +38,7 @@ class TestLabeledCounter:
 
 
 class TestLabeledHistogram:
-    """Histogram with labels creates per-label buckets."""
+    """Histogram with Prometheus-style labels creates per-label buckets."""
 
     def test_labeled_histogram(self):
         """histogram() records per-label observations."""
@@ -74,7 +74,7 @@ class TestAgentRunMetrics:
         assert 'agent_runs_total{agent_type="autonomous",status="failed"} 1' in out
 
     def test_agent_duration_histogram(self):
-        """agent_run_duration_seconds histogram with labels."""
+        """agent_run_duration_seconds histogram with labels and buckets."""
         reset()
         histogram("agent_run_duration_seconds", 2.5, labels={"agent_type": "intelligence", "status": "completed"})
         histogram("agent_run_duration_seconds", 8.3, labels={"agent_type": "intelligence", "status": "completed"})

@@ -84,7 +84,7 @@ class TestCounterLabels:
 
 
 class TestHistogram:
-    """Test histogram operations."""
+    """Test histogram operations with configurable buckets."""
 
     def test_record_observation(self):
         """histogram() records an observation."""
@@ -104,14 +104,28 @@ class TestHistogram:
         assert "duration_seconds_count 3" in out
         assert "duration_seconds_sum 0.600000" in out
 
-    def test_percentiles(self):
-        """Percentile values are calculated correctly."""
+    def test_default_buckets(self):
+        """Default Prometheus buckets are rendered correctly."""
         reset()
-        for i in range(100):
-            histogram("latency", float(i))
+        histogram("latency_seconds", 0.05)
+        histogram("latency_seconds", 0.25)
+        histogram("latency_seconds", 1.5)
         out = format_prometheus()
-        assert "latency_p50 50" in out
-        assert "latency_p95 95" in out
+        # 0.05 <= 0.05 (bucket), 0.25 <= 0.25, 1.5 > 1.0 but <= 2.5
+        assert 'le="0.050000"} 1' in out
+        assert 'le="0.250000"} 2' in out
+        assert 'le="2.500000"} 3' in out
+        assert 'le="+Inf"} 3' in out
+
+    def test_custom_buckets(self):
+        """Custom buckets override defaults."""
+        reset()
+        histogram("custom_seconds", 50, buckets=(10, 25, 50, 100))
+        histogram("custom_seconds", 75, buckets=(10, 25, 50, 100))
+        out = format_prometheus()
+        # 50 <= 50, 75 > 50; both <= 100
+        assert 'le="50.000000"} 1' in out
+        assert 'le="100.000000"} 2' in out
 
 
 class TestHistogramLabels:

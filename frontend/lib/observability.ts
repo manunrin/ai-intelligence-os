@@ -66,9 +66,15 @@ export function renderPrometheus(): string {
   return lines.join("\n") + "\n";
 }
 
+let flushTimer: ReturnType<typeof setInterval> | null = null;
+let flushInFlight = false;
+
 /** Flush collected metrics to the backend /metrics endpoint. */
 async function flushToBackend(): Promise<void> {
   if (typeof window === "undefined") return;
+  // Prevent concurrent flushes — one in-flight at a time
+  if (flushInFlight) return;
+  flushInFlight = true;
   try {
     await fetch("/api/metrics", {
       method: "POST",
@@ -76,11 +82,11 @@ async function flushToBackend(): Promise<void> {
       body: renderPrometheus(),
     });
   } catch {
-    // Backend not available — metrics still collected in-memory
+    // Backend not available — metrics still collected in-memory, next flush will retry
+  } finally {
+    flushInFlight = false;
   }
 }
-
-let flushTimer: ReturnType<typeof setInterval> | null = null;
 
 export function startObservability(): void {
   if (typeof window === "undefined") return;

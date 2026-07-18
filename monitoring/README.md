@@ -4,7 +4,7 @@ Observability configuration for the AI Intelligence OS platform.
 
 ## Components
 
-- **Prometheus** — Metrics collection and alerting thresholds
+- **Prometheus** — Metrics collection with labeled counters/histograms
 - **Structured JSON logging** — Request-scoped log correlation via `request_id`
 - **Frontend observability** — Client-side API latency and agent stream tracking
 
@@ -23,6 +23,8 @@ Observability configuration for the AI Intelligence OS platform.
 |--------|------|--------|--------|
 | `http_requests_total` | counter | `method`, `status`, `path` | LogMiddleware |
 | `http_request_duration_seconds` | histogram | `method`, `status`, `path` | LogMiddleware |
+
+**Path normalization**: UUID segments in request paths are replaced with `<uuid>` to prevent cardinality explosion. E.g., `/api/v1/agents/runs/550e8400-.../stream` → `/api/v1/agents/runs/<uuid>/stream`.
 
 ## Agent Run Metrics
 
@@ -45,6 +47,9 @@ Observability configuration for the AI Intelligence OS platform.
 |--------|------|--------|--------|
 | `embedding_requests_total` | counter | `model`, `status` (`success`/`failed`) | EmbeddingClient |
 | `embedding_request_duration_seconds` | histogram | `model`, `status` | EmbeddingClient |
+| `embedding_batch_total` | counter | `model`, `status` | EmbeddingClient.embed_batch() |
+| `embedding_batch_items_total` | counter | `model`, `result` (`success`/`failed`) | EmbeddingClient.embed_batch() |
+| `embedding_batch_duration_seconds` | histogram | `model`, `status` | EmbeddingClient.embed_batch() |
 
 ## Vector Search Metrics
 
@@ -63,6 +68,16 @@ Observability configuration for the AI Intelligence OS platform.
 | `http_request_duration_seconds` | histogram | `method`, `status`, `path` | api.ts request wrapper |
 | `agent_stream_events_total` | counter | `type` | useAgentStream hook |
 | `agent_stage_duration_seconds` | histogram | `stage` | useAgentStream hook |
+
+## Histogram Buckets
+
+All backend histograms use configurable bucket boundaries. Default Prometheus standard buckets:
+
+```
+[0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0]
+```
+
+Custom buckets can be passed via `histogram(name, value, buckets=(...))`. Output follows Prometheus text format with `_bucket{le="..."}` cumulative lines plus `_count`, `_sum`, and `_bucket{le="+Inf"}`.
 
 ## Logging
 

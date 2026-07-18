@@ -1,7 +1,8 @@
-"""Prometheus-compatible metrics with label support."""
+"""Prometheus-compatible metrics with label support and histogram buckets."""
 
 from __future__ import annotations
 
+import math
 import time
 import uuid
 from collections import defaultdict
@@ -12,6 +13,9 @@ from typing import Any
 
 _counters: dict[str, dict[tuple[str, ...], int]] = defaultdict(lambda: defaultdict(int))
 _histograms: dict[str, dict[tuple[str, ...], list[float]]] = defaultdict(lambda: defaultdict(list))
+
+# Default Prometheus buckets (seconds) for latency-style histograms
+_DEFAULT_BUCKETS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0)
 
 
 def counter(name: str, value: int = 1, labels: dict[str, str] | None = None) -> None:
@@ -26,16 +30,22 @@ def counter(name: str, value: int = 1, labels: dict[str, str] | None = None) -> 
     _counters[name][key] += value
 
 
-def histogram(name: str, value: float, labels: dict[str, str] | None = None) -> None:
+def histogram(name: str, value: float, labels: dict[str, str] | None = None, buckets: tuple[float, ...] | None = None) -> None:
     """Record a histogram observation, optionally with labels.
+
+    Uses built-in bucket accumulation so format_prometheus renders proper
+    Prometheus histogram _bucket lines instead of raw percentile computation.
 
     Args:
         name: Metric name (e.g. "http_request_duration_seconds").
         value: Observation value (e.g. elapsed seconds).
         labels: Optional label dict.
+        buckets: Upper bounds for bucket lines. Defaults to Prometheus standard.
     """
     key = _label_key(labels)
-    _histograms[name][key].append(value)
+    if buckets is None:
+        buckets = _DEFAULT_BUCKETS
+    _histograms[name][key].append((value, buckets))
 
 
 def reset() -> None:
@@ -51,6 +61,25 @@ def _label_key(labels: dict[str, str] | None) -> tuple[str, ...]:
     return tuple(sorted(labels.items()))
 
 
+def _compute_buckets(values: list[tuple[float, tuple[float, ...]]]) -> list[tuple[int, float]]:
+    """Compute cumulative bucket counts from a list of (value, buckets) tuples.
+
+    Returns list of (upper_bound, cumulative_count) pairs.
+    """
+    # Collect all unique bucket boundaries across all observations
+    all_bounds: set[float] = set()
+    for _, buckets in values:
+        all_bounds.update(buckets)
+    all_bounds.add(float("inf"))
+    sorted_bounds = sorted(all_bounds)
+
+    result: list[tuple[int, float]] = []
+    for bound in sorted_bounds:
+        count = sum(1 for v, _ in values if v <= bound)
+        result.append((bound, count))
+    return result
+
+
 def format_prometheus() -> str:
     """Render all metrics in Prometheus text exposition format."""
     lines: list[str] = []
@@ -60,21 +89,22 @@ def format_prometheus() -> str:
             lines.append(f"# TYPE {name} counter")
             lines.append(f"{name}{_format_labels(key)} {count}")
     for name, buckets in sorted(_histograms.items()):
-        for key, values in sorted(buckets.items()):
-            total = len(values)
-            if total == 0:
+        for key, observations in sorted(buckets.items()):
+            if not observations:
                 continue
-            s = sorted(values)
-            p50 = s[int(total * 0.5)]
-            p95 = s[min(int(total * 0.95), total - 1)]
-            p99 = s[min(int(total * 0.99), total - 1)]
+            bucket_lines = _compute_buckets(observations)
+            total_count = len(observations)
+            total_sum = sum(v for v, _ in observations)
+
             lines.append(f"# HELP {name} Application histogram metric")
             lines.append(f"# TYPE {name} histogram")
-            lines.append(f"{name}{_format_labels(key)}_count {total}")
-            lines.append(f"{name}{_format_labels(key)}_sum {sum(values):.6f}")
-            lines.append(f"{name}{_format_labels(key)}_p50 {p50:.6f}")
-            lines.append(f"{name}{_format_labels(key)}_p95 {p95:.6f}")
-            lines.append(f"{name}{_format_labels(key)}_p99 {p99:.6f}")
+            for bound, cum_count in bucket_lines[:-1]:  # all explicit buckets
+                upper = f"{bound:.6f}" if bound != math.inf else "+Inf"
+                lines.append(f"{name}{_format_labels(key)}_bucket{{{_format_labels_inner(key)}le=\"{upper}\"}} {cum_count}")
+            # +Inf bucket always equals total_count
+            lines.append(f"{name}{_format_labels(key)}_bucket{{{_format_labels_inner(key)}le=\"+Inf\"}} {total_count}")
+            lines.append(f"{name}{_format_labels(key)}_count {total_count}")
+            lines.append(f"{name}{_format_labels(key)}_sum {total_sum:.6f}")
     return "\n".join(lines) + "\n"
 
 
@@ -84,3 +114,11 @@ def _format_labels(key: tuple[str, ...]) -> str:
         return ""
     parts = ",".join(f'{k}="{v}"' for k, v in key)
     return f"{{{parts}}}"
+
+
+def _format_labels_inner(key: tuple[str, ...]) -> str:
+    """Format a label tuple without outer braces (used inside bucket label)."""
+    if not key:
+        return ""
+    parts = ",".join(f'{k}="{v}"' for k, v in key)
+    return parts

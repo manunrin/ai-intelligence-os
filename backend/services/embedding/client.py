@@ -53,14 +53,27 @@ class EmbeddingClient:
         Returns:
             List of EmbeddingResult, one per input.
         """
+        start = _time.monotonic()
+        model_label = model or "default"
+        success_count = 0
+        fail_count = 0
         results: list[EmbeddingResult] = []
+
         for i, text in enumerate(texts):
             try:
                 result = await self._provider.embed(text, model=model)
                 results.append(result)
+                success_count += 1
             except Exception as exc:
                 logger.error("Embedding failed for text[%d]: %s", i, exc)
                 results.append(EmbeddingResult(embedding=[], model=model or "default"))
+                fail_count += 1
+
+        elapsed = _time.monotonic() - start
+        counter("embedding_batch_total", labels={"model": model_label, "status": "success"})
+        counter("embedding_batch_items_total", labels={"model": model_label, "result": "success"}, value=success_count)
+        counter("embedding_batch_items_total", labels={"model": model_label, "result": "failed"}, value=fail_count)
+        histogram("embedding_batch_duration_seconds", elapsed, labels={"model": model_label, "status": "success"})
         return results
 
     async def health_check(self) -> bool:
