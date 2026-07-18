@@ -17,6 +17,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!frontend/tests/*/lib/
 lib64/
 parts/
 sdist/
