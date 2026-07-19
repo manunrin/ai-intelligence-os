@@ -52,37 +52,37 @@ export function KnowledgeDetail({ item, onClose }: KnowledgeDetailProps) {
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {/* Content body */}
           {item.content && (
-            <div>
+            <dl>
               <dt className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Content</dt>
-              <p className="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{item.content}</p>
-            </div>
+              <dd className="mt-2 text-sm leading-relaxed text-slate-700 dark:text-slate-300 whitespace-pre-wrap">{item.content}</dd>
+            </dl>
           )}
 
           {/* Tags */}
           {item.tags && item.tags.length > 0 && (
-            <div>
+            <dl>
               <dt className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Tags</dt>
-              <div className="mt-2 flex flex-wrap gap-1.5">
+              <dd className="mt-2 flex flex-wrap gap-1.5">
                 {item.tags.map((tag) => (
                   <Badge key={tag} variant="muted" className="text-[10px] px-2 py-0.5">{tag}</Badge>
                 ))}
-              </div>
-            </div>
+              </dd>
+            </dl>
           )}
 
           {/* Metadata */}
           <div className="grid grid-cols-2 gap-4">
-            <div>
+            <dl>
               <dt className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Created</dt>
               <dd className="mt-1 text-sm text-slate-900 dark:text-slate-100">
                 {new Date(item.created_at).toLocaleString()}
               </dd>
-            </div>
+            </dl>
             {item.article_id && (
-              <div>
+              <dl>
                 <dt className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Source</dt>
                 <dd className="mt-1 text-sm text-blue-600 dark:text-blue-400">Article #{item.article_id.slice(0, 8)}</dd>
-              </div>
+              </dl>
             )}
           </div>
         </div>

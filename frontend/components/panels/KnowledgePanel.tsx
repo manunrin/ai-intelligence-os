@@ -30,16 +30,19 @@ const KIND_LABELS: Record<string, string> = {
   default: "Knowledge",
 };
 
+const KIND_VARIANTS: Record<string, "default" | "success" | "warning" | "danger" | "muted"> = {
+  concept: "success",
+  person: "default",
+  event: "warning",
+  organization: "default",
+  place: "muted",
+};
+
 export function KnowledgePanel({ items, onNew, onEdit, onDelete }: KnowledgePanelProps) {
   const kinds = [...new Set(items.map((i) => i.kind))];
 
   return (
     <>
-      <div className="flex items-center justify-between">
-        <p className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">{items.length} item{items.length !== 1 ? 's' : ''}</p>
-        <Button onClick={onNew}>New Item</Button>
-      </div>
-
       {/* Tag cloud */}
       {items.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -91,7 +94,7 @@ function KnowledgeCard({
             </p>
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <Badge variant="default" className="text-[10px] px-1.5 py-0">{kindLabel}</Badge>
+            <Badge variant={KIND_VARIANTS[item.kind] ?? "muted"} className="text-[10px] px-1.5 py-0">{kindLabel}</Badge>
             {item.tags?.slice(0, 3).map((tag) => (
               <Badge key={tag} variant="muted" className="text-[10px] px-1.5 py-0">{tag}</Badge>
             ))}
@@ -100,7 +103,7 @@ function KnowledgeCard({
             )}
           </div>
           <p className="mt-1.5 text-xs text-slate-400 dark:text-slate-500">
-            {new Date(item.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" })}
+            {new Date(item.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
           </p>
         </div>
         <div className="flex gap-1 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100">
