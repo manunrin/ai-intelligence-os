@@ -1,20 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAuth, type User } from "@/lib/auth-context";
-import { useToast } from "@/lib/toast";
-import { queryClient } from "@/lib/query-client";
+import { AppShell } from "@/components/layout/AppShell";
 import { useArticles } from "@/hooks/useArticles";
-import { useTasks } from "@/hooks/useTasks";
 import { useKnowledgeItems } from "@/hooks/useKnowledge";
+import { useTasks } from "@/hooks/useTasks";
 import { useReports } from "@/hooks/useReports";
 import { useAgentRuns } from "@/hooks/useAgentRuns";
 import { useDeleteArticle, useDeleteTask, useDeleteKnowledge } from "@/hooks/useDelete";
+import { useToast } from "@/lib/toast";
+import { queryClient } from "@/lib/query-client";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
 import { Modal } from "@/components/ui/Modal";
+import type { Article, AgentRun, Task, KnowledgeItem, IntelligenceReport } from "@/types";
 import { ArticleFormBody } from "@/components/articles/ArticleForm";
 import { TaskFormBody } from "@/components/tasks/TaskForm";
 import { KnowledgeFormBody } from "@/components/knowledge/KnowledgeForm";
@@ -23,9 +23,8 @@ import { DashboardPanel } from "@/components/panels/DashboardPanel";
 import { ArticlesPanel } from "@/components/panels/ArticlesPanel";
 import { TasksPanel } from "@/components/panels/TasksPanel";
 import { KnowledgePanel } from "@/components/panels/KnowledgePanel";
-import { AgentsPanel } from "@/components/panels/AgentsPanel";
+import { AgentsPanel } from "@/components/panels/AgentExecutionPanel";
 import { ReportsPanel } from "@/components/panels/ReportsPanel";
-import type { Article, AgentRun, Task, KnowledgeItem, IntelligenceReport } from "@/types";
 
 type TabKey = "dashboard" | "articles" | "knowledge" | "tasks" | "agents" | "reports";
 
@@ -38,9 +37,7 @@ const tabs: { key: TabKey; label: string }[] = [
   { key: "reports", label: "Reports" },
 ];
 
-export default function Home() {
-  const router = useRouter();
-  const { user, isAuthenticated, isLoading, logout } = useAuth();
+export default function HomePage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -99,19 +96,8 @@ export default function Home() {
     }
   };
 
-  // Auth guard
-  if (isLoading || !isAuthenticated) {
-    return (
-      <main className="min-h-screen bg-slate-50 flex items-center justify-center dark:bg-slate-950">
-        <div className="text-center space-y-3">
-          <p className="text-sm text-slate-500 dark:text-slate-400">Loading...</p>
-        </div>
-      </main>
-    );
-  }
-
   return (
-    <main className="min-h-screen bg-slate-50 p-6 dark:bg-slate-950">
+    <AppShell>
       <div className="mx-auto max-w-6xl space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -121,8 +107,6 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-3">
             <Badge variant={error ? "danger" : "success"}>{error ? "Offline" : "Connected"}</Badge>
-            <span className="text-sm text-slate-600 dark:text-slate-300">{user!.username}</span>
-            <Button variant="ghost" size="sm" onClick={() => { logout(); router.push("/login"); }}>Logout</Button>
           </div>
         </div>
 
@@ -295,7 +279,7 @@ export default function Home() {
       >
         <p className="text-sm text-slate-600 dark:text-slate-300">Are you sure you want to delete this {deleteConfirm?.type}? This action cannot be undone.</p>
       </Modal>
-    </main>
+    </AppShell>
   );
 }
 
