@@ -309,6 +309,18 @@ lsof -i :3000  # Frontend
 # Change ports in .env using POSTGRES_PORT, REDIS_PORT, etc.
 ```
 
+## Milestone Documentation
+
+At the completion of every Phase or major milestone, update `docs/CURRENT_STATE.md` before creating the final commit. The update must include:
+
+- **Current phase status** — what was completed, any partial work remaining
+- **Completed changes** — key deliverables and their locations
+- **Architecture changes** — new services, modified data models, dependency updates
+- **New known issues** — anything discovered during the phase that needs follow-up
+- **Recommended next tasks** — what should be tackled first in the next phase
+
+This keeps the project snapshot accurate so future work (and AI assistants) can understand the codebase state without digging through commit history.
+
 ## Code Style
 
 ### Python

@@ -79,6 +79,11 @@ Advanced knowledge management capabilities: vector search (Qdrant), RAG pipeline
 - MetricCard component
 - Modal component with form bodies (KnowledgeForm, ReportForm, TaskForm)
 - Sidebar polish, dashboard polish, toast polish
+- Knowledge UI: standalone page with filter bar and slide-over detail view
+- Knowledge UI: interactive kind filter badges (click to toggle, active blue state)
+- Knowledge UI: semantic `<dl>/<dt>/<dd>` structure in detail panel
+- Knowledge UI: per-kind badge color coding (concept=green, person=blue, event=amber, place=slate)
+- Knowledge UI: consistent date formatting across all panels (month/day/year)
 
 ---
 
@@ -149,6 +154,8 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 12. **No standalone articles page** — Articles only visible as a tab in the main dashboard; `frontend/app/articles/` directory is empty.
 13. **No standalone tasks page** — Tasks only visible as a tab in the main dashboard; `frontend/app/tasks/` directory is empty.
 14. **NotificationAgent path** — Located at `backend/agents/notification/agent.py` (subdirectory), not `backend/agents/notification_agent.py`.
+15. **Knowledge detail slide-over takes full width on mobile** — No responsive bottom-sheet fallback for narrow viewports.
+16. **KnowledgePanel badges are display-only** — Filtering state is owned by KnowledgePage. KnowledgePanel kind badges exist for visual context but have no click handler, preserving component boundaries.
 
 ---
 
