@@ -51,6 +51,16 @@ RAG chat integration wired end-to-end across backend and frontend:
 - **New hooks** — `useRAGQuery()` mutation in `frontend/hooks/useKnowledge.ts`; `unwrapSingle<RAGResponse>` decodes the API envelope.
 - **Architecture** — Frontend now exposes two modes on the Knowledge workspace: **Browse** (list/search/filter with kind badges) and **Ask AI** (chat-style RAG over the same knowledge base). No backend changes required.
 
+### Phase 9 Auto Embedding — COMPLETE (2026-07-19)
+
+Knowledge item CRUD now automatically generates embeddings and syncs to Qdrant:
+
+- **KnowledgeItemService embedding sync** — `create_knowledge_item()` generates an embedding for `content` after DB insert; `update_knowledge_item()` regenerates when `content` changes; `delete_knowledge_item()` removes the Qdrant point after DB delete.
+- **Qdrant upsert/delete integration** — Embeddings are stored as 1536-dim cosine vectors in the `knowledge_items` collection with payload `{title, kind, article_id, tags}`. Delete uses `QdrantVectorService.delete()`.
+- **DI wiring** — `get_knowledge_service()` in `backend/routers/deps.py` now injects `embedding_client=Depends(get_embedding_client)` and `vector_service=Depends(get_vector_service)`; moved below the AI infrastructure section to resolve forward references.
+- **Resilience** — All embedding/vector operations are wrapped in try/except; failures log warnings but never fail the database CRUD. If services are unavailable, items persist normally and fall back to keyword search via RAG.
+- **Test verification** — 27 tests pass across `test_knowledge_service.py`, `test_knowledge_write.py`, and `test_protected_endpoints.py` with no regressions.
+
 ---
 
 ## Completed Milestones
@@ -88,22 +98,11 @@ RAG chat integration wired end-to-end across backend and frontend:
 
 ### Frontend Evolution (recent)
 - Dashboard with tabbed interface (Dashboard, Articles, Knowledge, Tasks, Agents, Reports)
-- Workspace pages: standalone routes for Knowledge and Agents
-- Agent execution visualization with core AI product experience
-- Rich card components replacing flat tables
-- Design token system: custom easing curves, durations, refined colors
-- Button system with press feedback and refined variants
-- EmptyState component for consistent empty states
-- Toast notification system
-- Slide-over detail views (KnowledgeDetail)
-- MetricCard component
-- Modal component with form bodies (KnowledgeForm, ReportForm, TaskForm)
-- Sidebar polish, dashboard polish, toast polish
-- Knowledge UI: standalone page with filter bar and slide-over detail view
-- Knowledge UI: interactive kind filter badges (click to toggle, active blue state)
-- Knowledge UI: semantic `<dl>/<dt>/<dd>` structure in detail panel
-- Knowledge UI: per-kind badge color coding (concept=green, person=blue, event=amber, place=slate)
-- Knowledge UI: consistent date formatting across all panels (month/day/year)
+- Workspace pages: standalone routes for Knowledge and Agents; Browse + Ask AI tabs on Knowledge
+- Agent execution visualization, rich card components, design token system
+- Button system, EmptyState, Toast, Slide-over detail views, MetricCard, Modal forms
+- Knowledge UI: filter bar, kind badges, semantic detail panel, per-kind colors, date formatting
+- RAG Chat UI: `RAGChat` component, `useRAGQuery()` hook, chat bubbles with source citations
 
 ---
 
