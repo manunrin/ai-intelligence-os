@@ -31,6 +31,16 @@ Advanced knowledge management capabilities: vector search (Qdrant), RAG pipeline
 
 **Status:** Backend vector/RAG services exist (`backend/services/vector/`, `backend/services/rag/`, `backend/services/knowledge/service.py`). Frontend has standalone workspace pages for Knowledge and Agents. Reports and Tasks are dashboard tabs, not standalone routes. Dashboard remains tab-based. Visual polish ongoing.
 
+### Phase 9 Frontend QA — COMPLETE (2026-07-19)
+
+Knowledge UI quality work completed across three blocks:
+
+- **Duplicate chrome removed** — KnowledgePanel no longer renders duplicate headers or filter bars; KnowledgePage owns all page-level chrome.
+- **Interactive kind filtering** — KnowledgePage filter bar with click-to-toggle badges, active blue state, filtered item count display.
+- **Semantic markup** — KnowledgeDetail uses proper `<dl>/<dt>/<dd>` definition lists instead of orphaned `<dt>` elements.
+- **Visual consistency** — Per-kind badge colors (concept=green, person=blue, event=amber, place=slate); date formatting normalized to month/day/year across all panels.
+- **Component boundaries preserved** — KnowledgePanel kind badges remain display-only for visual context; filtering state lives exclusively in KnowledgePage.
+
 ---
 
 ## Completed Milestones
@@ -155,13 +165,12 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 13. **No standalone tasks page** — Tasks only visible as a tab in the main dashboard; `frontend/app/tasks/` directory is empty.
 14. **NotificationAgent path** — Located at `backend/agents/notification/agent.py` (subdirectory), not `backend/agents/notification_agent.py`.
 15. **Knowledge detail slide-over takes full width on mobile** — No responsive bottom-sheet fallback for narrow viewports.
-16. **KnowledgePanel badges are display-only** — Filtering state is owned by KnowledgePage. KnowledgePanel kind badges exist for visual context but have no click handler, preserving component boundaries.
 
 ---
 
 ## Next Recommended Tasks
 
-### Immediate (finish Phase 9)
+### Phase 9 Backend Integration (next)
 1. Wire up vector search UI — connect KnowledgePage to Qdrant similarity search results
 2. Build RAG question-answering interface — chat-style or search-box UI over knowledge base
 3. Implement knowledge graph visualization — node-link diagram showing entity relationships
@@ -172,8 +181,9 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 6. Add pagination controls to all list views (knowledge, articles, tasks, reports)
 7. Implement per-tab loading/error states on dashboard
 8. Connect agent run button to actual LangGraph workflow execution
+9. Add mobile-responsive slide-over pattern for KnowledgeDetail
 
 ### Medium-term (Phase 10)
-9. Additional connectors (Twitter/X, LinkedIn, arXiv, Hacker News)
-10. Notification channels (Telegram, WeChat, Email SMTP/SES)
-11. GitHub issue auto-creation from tasks via MCP
+10. Additional connectors (Twitter/X, LinkedIn, arXiv, Hacker News)
+11. Notification channels (Telegram, WeChat, Email SMTP/SES)
+12. GitHub issue auto-creation from tasks via MCP
