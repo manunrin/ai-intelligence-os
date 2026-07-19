@@ -24,6 +24,24 @@ export type KnowledgeItem = {
   user_id: string | null;
 } & Record<string, unknown>;
 
+export interface KnowledgeSearchResult {
+  knowledge_id: string;
+  title: string;
+  content: string;
+  kind: string;
+  score: number | null;
+  tags: string[];
+}
+
+export interface RAGResponse {
+  answer: string;
+  sources: Array<{
+    knowledge_id: string;
+    title: string;
+  }>;
+  query: string;
+}
+
 export type AgentRun = {
   id: string;
   agent_id: string;

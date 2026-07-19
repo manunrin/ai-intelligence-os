@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap } from "@/lib/api";
-import type { KnowledgeItem } from "@/types";
+import type { KnowledgeItem, KnowledgeSearchResult } from "@/types";
 
 export const knowledgeKeys = {
   all: ["knowledge"] as const,
@@ -33,6 +33,40 @@ export function useUpdateKnowledge() {
       api.put<unknown>(`/api/v1/knowledge/${id}`, body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: knowledgeKeys.lists() });
+    },
+  });
+}
+
+export function useKnowledgeSearch() {
+  return useQuery({
+    queryKey: ["knowledge", "search"],
+    queryFn: async () => [],
+    enabled: false,
+  });
+}
+
+export function useKnowledgeSearchMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      query: string;
+      limit?: number;
+      kind_filter?: string | null;
+      tag_filter?: string | null;
+      score_threshold?: number | null;
+    }) => {
+      const raw = await api.post<unknown>("/api/v1/knowledge/search", params);
+      if (typeof raw === "object" && raw !== null && "data" in raw) {
+        const obj = raw as Record<string, unknown>;
+        if ("data" in obj && typeof obj.data === "object") {
+          const inner = obj.data as Record<string, unknown>;
+          return (inner.results ?? []) as KnowledgeSearchResult[];
+        }
+      }
+      return [];
+    },
+    onSuccess: (results) => {
+      qc.setQueryData(["knowledge", "searchResults"], results);
     },
   });
 }

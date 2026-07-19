@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -10,10 +11,16 @@ from ..schemas.error import ErrorResponse
 from ..schemas.knowledge import KnowledgeItemResponse
 from ..schemas.knowledge_create import KnowledgeItemCreate, KnowledgeItemUpdate
 from ..schemas.response import APIResponse
-from .deps import get_current_user, get_knowledge_service
+from ..schemas.rag import RAGRequest, RAGResponse, RAGSource
+from ..schemas.search import SearchRequest, SearchResponse, SearchResult
+from .deps import get_current_user, get_db, get_embedding_client, get_knowledge_service, get_llm_provider, get_vector_service
 from .pagination import PaginationParams, get_pagination
 from ..services.knowledge_service import KnowledgeItemService
+from ..services.rag.generator import RagGenerator
+from ..services.rag.retriever import RagRetriever
 from ..rate_limiter import limiter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/knowledge",
@@ -123,3 +130,140 @@ async def delete_knowledge_item(
     if not deleted:
         raise HTTPException(status_code=404, detail="Knowledge item not found")
     return APIResponse(success=True, data=None, error=None)
+
+
+@router.post(
+    "/search",
+    summary="Semantic knowledge search",
+    description="Search knowledge items using vector similarity.",
+    operation_id="searchKnowledge",
+    response_model=APIResponse[SearchResponse],
+)
+@limiter.limit("100/hour")
+async def search_knowledge(
+    body: SearchRequest,
+    request: Request,
+    db=Depends(get_db),
+    embedding_client=Depends(get_embedding_client),
+    vector_service=Depends(get_vector_service),
+):
+    """Perform semantic search over knowledge items.
+
+    Uses RagRetriever which chains:
+        Query → Embed → Vector Search → DB Fetch → Ranked Results
+
+    Falls back to keyword search if embedding or vector store is unavailable.
+    """
+    retriever = RagRetriever(
+        session=db,
+        embedding_client=embedding_client,
+        vector_service=vector_service,
+    )
+
+    results = await retriever.retrieve(
+        query=body.query,
+        limit=body.limit,
+        score_threshold=body.score_threshold,
+        kind_filter=body.kind_filter,
+        tag_filter=body.tag_filter,
+    )
+
+    search_results = [
+        SearchResult(
+            knowledge_id=r.knowledge_id,
+            title=r.title,
+            content=r.content,
+            kind=r.kind,
+            score=r.score,
+            tags=r.tags,
+        )
+        for r in results
+    ]
+
+    return APIResponse(
+        success=True,
+        data=SearchResponse(results=search_results),
+        error=None,
+    )
+
+
+@router.post(
+    "/rag",
+    summary="RAG question answering",
+    description="Generate an answer from retrieved knowledge items using LLM.",
+    operation_id="ragQuestionAnswering",
+    response_model=APIResponse[RAGResponse],
+)
+@limiter.limit("50/hour")
+async def rag_question_answering(
+    body: RAGRequest,
+    request: Request,
+    db=Depends(get_db),
+    embedding_client=Depends(get_embedding_client),
+    vector_service=Depends(get_vector_service),
+    llm_provider=Depends(get_llm_provider),
+):
+    """Perform RAG question answering over knowledge items.
+
+    Uses RagRetriever to fetch relevant context, then RagGenerator to synthesize
+    an answer with LLM. Falls back to keyword search if embedding or vector store
+    is unavailable.
+    """
+    retriever = RagRetriever(
+        session=db,
+        embedding_client=embedding_client,
+        vector_service=vector_service,
+    )
+
+    # Retrieve context
+    context = await retriever.retrieve(
+        query=body.query,
+        limit=body.limit,
+    )
+
+    if not context:
+        return APIResponse(
+            success=True,
+            data=RAGResponse(
+                answer="No relevant knowledge items found for your query.",
+                sources=[],
+                query=body.query,
+            ),
+            error=None,
+        )
+
+    # Generate answer
+    generator = RagGenerator(provider=llm_provider)
+
+    try:
+        result = await generator.generate(
+            query=body.query,
+            context=context,
+            system_prompt=body.system_prompt,
+        )
+    except Exception as exc:
+        logger.warning("RAG generation failed: %s", exc)
+        return APIResponse(
+            success=False,
+            data=None,
+            error=ErrorResponse(
+                code="RAG_GENERATION_FAILED",
+                message=f"Failed to generate answer: {str(exc)}",
+            ),
+        )
+
+    # Format sources
+    sources = [
+        RAGSource(knowledge_id=s["knowledge_id"], title=s["title"])
+        for s in result.get("sources", [])
+    ]
+
+    return APIResponse(
+        success=True,
+        data=RAGResponse(
+            answer=result.get("answer", ""),
+            sources=sources,
+            query=body.query,
+        ),
+        error=None,
+    )

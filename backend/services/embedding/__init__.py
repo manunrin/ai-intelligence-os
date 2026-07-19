@@ -1,4 +1,4 @@
-from .base import EmbeddingClient, EmbeddingProvider, EmbeddingResult
-from .client import EmbeddingClient as EC
+from .base import EmbeddingProvider, EmbeddingResult
+from .client import EmbeddingClient
 
 __all__ = ["EmbeddingProvider", "EmbeddingResult", "EmbeddingClient"]

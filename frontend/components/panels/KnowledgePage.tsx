@@ -2,10 +2,13 @@
 
 import { useState } from "react";
 import { Button } from "@/components/ui/Button";
+import { Input } from "@/components/ui/Input";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { KnowledgePanel } from "@/components/panels/KnowledgePanel";
 import { KnowledgeDetail } from "@/components/panels/KnowledgeDetail";
-import type { KnowledgeItem } from "@/types";
+import type { KnowledgeItem, KnowledgeSearchResult } from "@/types";
+import { useKnowledgeSearchMutation } from "@/hooks/useKnowledge";
+import { useToast } from "@/lib/toast";
 
 interface KnowledgePageProps {
   items: KnowledgeItem[];
@@ -17,9 +20,45 @@ interface KnowledgePageProps {
 export function KnowledgePage({ items, onNew, onEdit, onDelete }: KnowledgePageProps) {
   const [selectedItem, setSelectedItem] = useState<KnowledgeItem | null>(null);
   const [filterKind, setFilterKind] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<KnowledgeSearchResult[]>([]);
+  const searchMutation = useKnowledgeSearchMutation();
+  const { toast } = useToast();
 
   const kinds = [...new Set(items.map((i) => i.kind))];
   const filteredItems = filterKind ? items.filter((i) => i.kind === filterKind) : items;
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+
+    setIsSearching(true);
+    try {
+      const response = await searchMutation.mutateAsync({
+        query: searchQuery,
+        limit: 10,
+        kind_filter: filterKind,
+      });
+
+      if (Array.isArray(response)) {
+        setSearchResults(response);
+      } else {
+        setSearchResults([]);
+      }
+    } catch (err) {
+      toast(err instanceof Error ? err.message : "Search failed", "error");
+      setSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setIsSearching(false);
+  };
 
   return (
     <div className="space-y-6">
@@ -28,12 +67,32 @@ export function KnowledgePage({ items, onNew, onEdit, onDelete }: KnowledgePageP
         <div>
           <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Knowledge Base</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
-            {filteredItems.length !== items.length && ` of ${items.length} total`}
+            {isSearching
+              ? `${searchResults.length} result${searchResults.length !== 1 ? 's' : ''}`
+              : `${filteredItems.length} item${filteredItems.length !== 1 ? 's' : ''}`}
+            {!isSearching && filteredItems.length !== items.length && ` of ${items.length} total`}
           </p>
         </div>
         <Button onClick={onNew}>New Item</Button>
       </div>
+
+      {/* Search bar */}
+      <form onSubmit={handleSearch} className="flex gap-2">
+        <Input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search knowledge base..."
+          className="flex-1"
+        />
+        <Button type="submit" disabled={isSearching || !searchQuery.trim()}>
+          {isSearching ? "Searching..." : "Search"}
+        </Button>
+        {isSearching && (
+          <Button type="button" variant="outline" onClick={handleClearSearch}>
+            Clear
+          </Button>
+        )}
+      </form>
 
       {/* Tag/kind filter bar */}
       {kinds.length > 0 && (
@@ -47,7 +106,7 @@ export function KnowledgePage({ items, onNew, onEdit, onDelete }: KnowledgePageP
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
             }`}
           >
-            All ({items.length})
+            All ({isSearching ? searchResults.length : items.length})
           </button>
           {kinds.map((kind) => (
             <button
@@ -60,14 +119,42 @@ export function KnowledgePage({ items, onNew, onEdit, onDelete }: KnowledgePageP
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:hover:bg-slate-700"
               }`}
             >
-              {kind} ({items.filter((i) => i.kind === kind).length})
+              {kind} ({isSearching ? searchResults.filter(r => r.kind === kind).length : items.filter(i => i.kind === kind).length})
             </button>
           ))}
         </div>
       )}
 
       {/* Content grid */}
-      <KnowledgePanel items={filteredItems} onNew={onNew} onEdit={onEdit} onDelete={onDelete} />
+      {isSearching ? (
+        searchResults.length > 0 ? (
+          <KnowledgePanel
+            items={searchResults.map((r) => ({
+              ...r,
+              id: r.knowledge_id,
+              article_id: null,
+              created_at: "",
+              user_id: null,
+            })) as KnowledgeItem[]}
+            onNew={onNew}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            showScores={true}
+          />
+        ) : (
+          <EmptyState
+            title="No results found"
+            description="Try a different search query or clear the search to see all items."
+          />
+        )
+      ) : (
+        <KnowledgePanel
+          items={filteredItems}
+          onNew={onNew}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
+      )}
 
       {/* Detail slide-over */}
       {selectedItem && (

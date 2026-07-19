@@ -37,11 +37,44 @@ async def lifespan(app: FastAPI):
     _bootstrap = ApplicationBootstrap(session_factory)
     _bootstrap.initialize()
 
+    # ── AI infrastructure: LLM router, embedding client, vector store ──
+    from .services.llm.router import LLMRouter
+    from .services.llm.providers.openai import OpenAIProvider
+    from .services.llm.providers.anthropic import AnthropicProvider
+    from .services.llm.base import LLMProvider
+    from .services.embedding.client import EmbeddingClient
+    from .services.embedding.base import LLMGatewayEmbeddingProvider
+    from .services.vector.qdrant import QdrantVectorService
+
+    settings = get_settings()
+
+    # LLM router — provider selection, model routing, fallback chains
+    llm_router = LLMRouter()
+
+    # Default chat provider (used by RAG generator)
+    llm_provider: LLMProvider | None = None
+    if settings.openai_api_key:
+        llm_provider = OpenAIProvider(api_key=settings.openai_api_key)
+    elif settings.anthropic_api_key:
+        llm_provider = AnthropicProvider(api_key=settings.anthropic_api_key)
+
+    # Embedding client — wraps LLM router for vector generation
+    embedding_provider = LLMGatewayEmbeddingProvider(llm_router)
+    embedding_client = EmbeddingClient(provider=embedding_provider)
+
+    # Qdrant vector store — semantic search over knowledge items
+    vector_service = QdrantVectorService(url=settings.qdrant_url)
+    await vector_service.ensure_collection()
+
     app.state.bootstrap = _bootstrap
     app.state.mcp_registry = _bootstrap.mcp_registry
     app.state.tool_registry = _bootstrap.tool_registry
     app.state.event_publisher = _bootstrap.event_publisher
     app.state.session_factory = session_factory
+    app.state.llm_router = llm_router
+    app.state.llm_provider = llm_provider
+    app.state.embedding_client = embedding_client
+    app.state.vector_service = vector_service
 
     logger.info("Backend startup complete — MCP servers: %s", list(_bootstrap.mcp_registry.list_servers().keys()))
 

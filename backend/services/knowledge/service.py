@@ -8,7 +8,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database.models.knowledge_item import KnowledgeItem
+from ...database.models.knowledge_item import KnowledgeItem
 from ..embedding.base import EmbeddingResult
 from ..vector.qdrant import QdrantPoint, QdrantVectorService
 

@@ -10,8 +10,8 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..database.models.knowledge_item import KnowledgeItem
-from ..embedding.base import EmbeddingClient
+from ...database.models.knowledge_item import KnowledgeItem
+from ..embedding.client import EmbeddingClient
 from ..vector.qdrant import QdrantVectorService
 
 logger = logging.getLogger(__name__)

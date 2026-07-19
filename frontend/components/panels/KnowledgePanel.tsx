@@ -10,6 +10,7 @@ interface KnowledgePanelProps {
   onNew: () => void;
   onEdit: (item: KnowledgeItem) => void;
   onDelete: (id: string) => void;
+  showScores?: boolean;
 }
 
 const KIND_ICONS: Record<string, string> = {
@@ -38,7 +39,7 @@ const KIND_VARIANTS: Record<string, "default" | "success" | "warning" | "danger"
   place: "muted",
 };
 
-export function KnowledgePanel({ items, onNew, onEdit, onDelete }: KnowledgePanelProps) {
+export function KnowledgePanel({ items, onNew, onEdit, onDelete, showScores }: KnowledgePanelProps) {
   const kinds = [...new Set(items.map((i) => i.kind))];
 
   return (
@@ -63,7 +64,7 @@ export function KnowledgePanel({ items, onNew, onEdit, onDelete }: KnowledgePane
       ) : (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {items.slice().reverse().map((item) => (
-            <KnowledgeCard key={item.id} item={item} onEdit={onEdit} onDelete={onDelete} />
+            <KnowledgeCard key={item.id} item={item} onEdit={onEdit} onDelete={onDelete} showScore={showScores} />
           ))}
         </div>
       )}
@@ -75,10 +76,12 @@ function KnowledgeCard({
   item,
   onEdit,
   onDelete,
+  showScore,
 }: {
   item: KnowledgeItem;
   onEdit: (i: KnowledgeItem) => void;
   onDelete: (id: string) => void;
+  showScore?: boolean;
 }) {
   const icon = KIND_ICONS[item.kind] ?? KIND_ICONS.default;
   const kindLabel = KIND_LABELS[item.kind] ?? item.kind;
@@ -92,6 +95,11 @@ function KnowledgeCard({
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100 line-clamp-2 leading-relaxed">
               {item.title}
             </p>
+            {showScore && typeof (item as Record<string, unknown>).score === 'number' && (
+              <Badge variant="default" className="text-[10px] px-1.5 py-0">
+                {((item as Record<string, unknown>).score as number) * 100}%
+              </Badge>
+            )}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             <Badge variant={KIND_VARIANTS[item.kind] ?? "muted"} className="text-[10px] px-1.5 py-0">{kindLabel}</Badge>
