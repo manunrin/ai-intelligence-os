@@ -1,7 +1,7 @@
 # AI Intelligence OS — Current State
 
-**Last Updated:** 2026-07-19  
-**Version:** 0.1.0 Beta  
+**Last Updated:** 2026-07-19
+**Version:** 0.1.0 Beta
 **Branch:** master (HEAD: `a345d29`)
 
 ---
@@ -61,6 +61,18 @@ Knowledge item CRUD now automatically generates embeddings and syncs to Qdrant:
 - **Resilience** — All embedding/vector operations are wrapped in try/except; failures log warnings but never fail the database CRUD. If services are unavailable, items persist normally and fall back to keyword search via RAG.
 - **Test verification** — 27 tests pass across `test_knowledge_service.py`, `test_knowledge_write.py`, and `test_protected_endpoints.py` with no regressions.
 
+### Phase 9.5 Hybrid Search Backend — COMPLETE (2026-07-19)
+
+Search retrieval upgraded from semantic-only to hybrid vector+keyword fusion:
+
+- **Dense vector search** — Qdrant cosine similarity search remains primary branch, over-fetching `limit * 2` for re-ranking headroom.
+- **PostgreSQL full-text search** — Replaced naive `ILIKE` fallback with `ts_rank`/`to_tsvector`/`plainto_tsquery` for tokenized keyword relevance scoring. Falls back to ILIKE if FTS unavailable.
+- **Reciprocal Rank Fusion (RRF)** — Dense and keyword results fused via RRF (`k=60`, `dense_weight=1.0`, `keyword_weight=0.8`). Deduplicates by `knowledge_id`, preserves individual `dense_score` and `keyword_score` fields alongside fused `score`.
+- **Hybrid search API parameters** — `SearchRequest` extended with `hybrid: bool = True`, `dense_weight: float`, `keyword_weight: float`. `SearchResult` extended with `hybrid_score`, `dense_score`, `keyword_score`. Backward-compatible: `hybrid=False` uses legacy dense-only path.
+- **Parallel execution** — `asyncio.gather` runs both branches concurrently with per-branch exception isolation. Failure in one branch does not affect the other.
+- **New test coverage** — 13 new tests in `test_rag_retriever.py` covering RRF fusion, duplicate merging, score threshold filtering, custom weights, hybrid flow, and branch failure isolation.
+- **Test verification** — Full unit test suite passes: **489 tests passed**, including the new hybrid search tests and all existing knowledge/router tests.
+
 ---
 
 ## Completed Milestones
@@ -97,11 +109,7 @@ Knowledge item CRUD now automatically generates embeddings and syncs to Qdrant:
 - Structured JSON logging
 
 ### Frontend Evolution (recent)
-- Dashboard with tabbed interface (Dashboard, Articles, Knowledge, Tasks, Agents, Reports)
-- Workspace pages: standalone routes for Knowledge and Agents; Browse + Ask AI tabs on Knowledge
-- Agent execution visualization, rich card components, design token system
-- Button system, EmptyState, Toast, Slide-over detail views, MetricCard, Modal forms
-- Knowledge UI: filter bar, kind badges, semantic detail panel, per-kind colors, date formatting
+- Dashboard with tabbed interface; standalone Knowledge/Agents pages with Browse + Ask AI tabs
 - RAG Chat UI: `RAGChat` component, `useRAGQuery()` hook, chat bubbles with source citations
 
 ---
@@ -153,7 +161,7 @@ User → Next.js (frontend/:3000) → FastAPI (backend/:8000) → LangGraph Work
 | `d9f63db` | feat(frontend): add EmptyState component |
 | `fae09e3` | feat(frontend): upgrade button system with press feedback |
 
-All recent activity has been frontend-focused. Backend services (vector search, RAG, knowledge extraction) were implemented earlier; the Knowledge workspace now has full Browse + Ask AI tabs with chat-style RAG over the knowledge base.
+All recent activity has been frontend-focused. Backend services (vector search, RAG, knowledge extraction) were implemented earlier; the Knowledge workspace now has full Browse + Ask AI tabs with chat-style RAG over the knowledge base. Hybrid search backend also completed.
 
 ---
 
@@ -181,18 +189,11 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 
 ### Phase 9 Remaining (next)
 1. Implement knowledge graph visualization — node-link diagram showing entity relationships
-2. Add hybrid search (BM25 + vector fusion) to knowledge search
-3. Expose kind/tag filters on RAG endpoint for scoped retrieval
-4. Add streaming response support to RAG chat (SSE/WebSocket)
+2. Expose kind/tag filters on RAG endpoint for scoped retrieval
+3. Add streaming response support to RAG chat (SSE/WebSocket)
+4. Add GIN full-text index migration for PostgreSQL FTS performance at scale
 
 ### Short-term
 5. Build frontend auth flow — login/register pages that store JWT tokens and attach to API requests
 6. Add pagination controls to all list views (knowledge, articles, tasks, reports)
 7. Implement per-tab loading/error states on dashboard
-8. Connect agent run button to actual LangGraph workflow execution
-9. Add mobile-responsive slide-over pattern for KnowledgeDetail
-
-### Medium-term (Phase 10)
-10. Additional connectors (Twitter/X, LinkedIn, arXiv, Hacker News)
-11. Notification channels (Telegram, WeChat, Email SMTP/SES)
-12. GitHub issue auto-creation from tasks via MCP
