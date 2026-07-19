@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-19  
 **Version:** 0.1.0 Beta  
-**Branch:** master (HEAD: `c9dae14`)
+**Branch:** master (HEAD: `a345d29`)
 
 ---
 
@@ -40,6 +40,16 @@ Knowledge UI quality work completed across three blocks:
 - **Semantic markup** — KnowledgeDetail uses proper `<dl>/<dt>/<dd>` definition lists instead of orphaned `<dt>` elements.
 - **Visual consistency** — Per-kind badge colors (concept=green, person=blue, event=amber, place=slate); date formatting normalized to month/day/year across all panels.
 - **Component boundaries preserved** — KnowledgePanel kind badges remain display-only for visual context; filtering state lives exclusively in KnowledgePage.
+
+### Phase 9 RAG Chat UI — COMPLETE (2026-07-19)
+
+RAG chat integration wired end-to-end across backend and frontend:
+
+- **Semantic search completion** — `POST /api/v1/knowledge/search` backed by Qdrant vector retrieval with ILIKE fallback; frontend `useKnowledgeSearchMutation` hook calls it from KnowledgePage search bar with kind/tag/score filters.
+- **RAG API completion** — `POST /api/v1/knowledge/rag` returns `{answer, sources, query}` with Qdrant retrieval → LLM generation pipeline and 50/hour rate limiting.
+- **RAG Chat UI completion** — New `RAGChat` component under `/knowledge` → "Ask AI" tab; chat bubbles, numbered source citation badges, Enter-to-send, auto-scroll, typing indicator, empty-state prompt, toast error handling.
+- **New hooks** — `useRAGQuery()` mutation in `frontend/hooks/useKnowledge.ts`; `unwrapSingle<RAGResponse>` decodes the API envelope.
+- **Architecture** — Frontend now exposes two modes on the Knowledge workspace: **Browse** (list/search/filter with kind badges) and **Ask AI** (chat-style RAG over the same knowledge base). No backend changes required.
 
 ---
 
@@ -120,7 +130,7 @@ User → Next.js (frontend/:3000) → FastAPI (backend/:8000) → LangGraph Work
 - `components/panels/` — Domain panels (KnowledgePanel, ReportsPanel, TasksPanel, AgentsPanel, ArticlesPanel, DashboardPanel, etc.)
 - `components/ui/` — 11 shared UI components (Button, Badge, Card, Table, Input, Modal, Select, Textarea, StatCard, MetricCard, EmptyState)
 - `components/knowledge/` — Form bodies (KnowledgeForm)
-- `hooks/` — @tanstack/react-query hooks (useKnowledge, useArticles, useTasks, useReports, useAgentRuns, useAgentStream)
+- `hooks/` — @tanstack/react-query hooks (useKnowledge, useArticles, useTasks, useReports, useAgentRuns, useAgentStream, useRAGQuery)
 - `lib/` — API client, auth context, query client, toast system, observability
 
 **Workers/Jobs:**
@@ -133,6 +143,7 @@ User → Next.js (frontend/:3000) → FastAPI (backend/:8000) → LangGraph Work
 
 | Commit | Message |
 |--------|---------|
+| `a345d29` | feat(frontend): add knowledge RAG chat interface |
 | `c9dae14` | fix(frontend): polish command center interactions |
 | `d0d4633` | fix(frontend): polish phase 9 visual consistency issues |
 | `90715fe` | fix(frontend): load global styles in app layout |
@@ -142,9 +153,8 @@ User → Next.js (frontend/:3000) → FastAPI (backend/:8000) → LangGraph Work
 | `c6e85fe` | feat(frontend): agent execution visualization |
 | `d9f63db` | feat(frontend): add EmptyState component |
 | `fae09e3` | feat(frontend): upgrade button system with press feedback |
-| `d895326` | feat(frontend): add design token system |
 
-All recent activity has been frontend-focused. Backend services (vector search, RAG, knowledge extraction) were implemented earlier but have not had corresponding frontend workspace pages or deep integration since the dashboard migration to tabbed layout.
+All recent activity has been frontend-focused. Backend services (vector search, RAG, knowledge extraction) were implemented earlier; the Knowledge workspace now has full Browse + Ask AI tabs with chat-style RAG over the knowledge base.
 
 ---
 
@@ -170,11 +180,11 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 
 ## Next Recommended Tasks
 
-### Phase 9 Backend Integration (next)
-1. Wire up vector search UI — connect KnowledgePage to Qdrant similarity search results
-2. Build RAG question-answering interface — chat-style or search-box UI over knowledge base
-3. Implement knowledge graph visualization — node-link diagram showing entity relationships
-4. Add hybrid search (BM25 + vector fusion) to knowledge search
+### Phase 9 Remaining (next)
+1. Implement knowledge graph visualization — node-link diagram showing entity relationships
+2. Add hybrid search (BM25 + vector fusion) to knowledge search
+3. Expose kind/tag filters on RAG endpoint for scoped retrieval
+4. Add streaming response support to RAG chat (SSE/WebSocket)
 
 ### Short-term
 5. Build frontend auth flow — login/register pages that store JWT tokens and attach to API requests
