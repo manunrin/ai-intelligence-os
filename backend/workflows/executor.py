@@ -83,26 +83,21 @@ def _sync_execute_impl(
 ) -> RunResult:
     """Synchronous execution of a compiled LangGraph app.
 
-    Uses .stream() instead of .invoke() so we can check cancellation
-    between graph steps.
+    Uses .astream() because graph nodes are async coroutines.
+    Runs the event loop inline so cancellation works between steps.
     """
     start_time = datetime.now(timezone.utc)
     try:
         graph_app = factory()
-        chunks = []
 
-        for chunk in graph_app.stream(state):
-            # Check cancellation token between steps
-            if cancellation_token.get(run_id, False):
-                logger.info("Run %s cancelled by executor", str(run_id))
-                return RunResult(
-                    status="cancelled",
-                    run_id=run_id,
-                    duration_ms=int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000),
-                    finished_at=datetime.now(timezone.utc),
-                )
-            if chunk is not None:
-                chunks.append(chunk)
+        # Run the async stream in an inline event loop
+        _loop = asyncio.new_event_loop()
+        try:
+            chunks = _loop.run_until_complete(
+                _stream_with_cancel(graph_app, state, run_id, cancellation_token)
+            )
+        finally:
+            _loop.close()
 
         # Combine all chunks into final output
         output = {}
@@ -129,3 +124,14 @@ def _sync_execute_impl(
             duration_ms=duration,
             finished_at=datetime.now(timezone.utc),
         )
+
+
+async def _stream_with_cancel(graph_app, state, run_id, cancellation_token):
+    """Stream from an async graph, checking cancellation between steps."""
+    chunks = []
+    async for chunk in graph_app.astream(state):
+        if cancellation_token.get(run_id, False):
+            return chunks  # partial result
+        if chunk is not None:
+            chunks.append(chunk)
+    return chunks

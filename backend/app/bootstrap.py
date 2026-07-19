@@ -11,6 +11,7 @@ from backend.mcp.registry import MCPRegistry
 from backend.mcp.servers.asana.server import AsanaMCPServer
 from backend.mcp.servers.browser.server import BrowserMCPServer
 from backend.mcp.servers.github.server import GitHubMCPServer
+from backend.mcp.servers.notion.server import NotionMCPServer
 from backend.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
