@@ -10,13 +10,12 @@ import type { KnowledgeItem } from "@/types";
 
 interface KnowledgePageProps {
   items: KnowledgeItem[];
-  isLoading: boolean;
   onNew: () => void;
   onEdit: (item: KnowledgeItem) => void;
   onDelete: (id: string) => void;
 }
 
-export function KnowledgePage({ items, isLoading, onNew, onEdit, onDelete }: KnowledgePageProps) {
+export function KnowledgePage({ items, onNew, onEdit, onDelete }: KnowledgePageProps) {
   const [selectedItem, setSelectedItem] = useState<KnowledgeItem | null>(null);
 
   const kinds = [...new Set(items.map((i) => i.kind))];
@@ -26,7 +25,7 @@ export function KnowledgePage({ items, isLoading, onNew, onEdit, onDelete }: Kno
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Knowledge Base</h1>
+          <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Knowledge Base</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             {items.length} items across {kinds.length} types
           </p>

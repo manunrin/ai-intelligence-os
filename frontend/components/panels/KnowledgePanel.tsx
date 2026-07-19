@@ -36,7 +36,7 @@ export function KnowledgePanel({ items, onNew, onEdit, onDelete }: KnowledgePane
   return (
     <>
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">Knowledge</h2>
+        <p className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">{items.length} item{items.length !== 1 ? 's' : ''}</p>
         <Button onClick={onNew}>New Item</Button>
       </div>
 

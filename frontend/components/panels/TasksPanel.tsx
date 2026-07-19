@@ -92,7 +92,7 @@ function TaskRow({
   const status = STATUS_CONFIG[task.status] ?? STATUS_CONFIG.todo;
 
   return (
-    <div className={`group flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition-all duration-150 ease-out hover:shadow-md dark:border-slate-700 dark:bg-slate-800 ${
+    <div className={`group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-2.5 shadow-sm transition-all duration-150 ease-out hover:shadow-md dark:border-slate-700 dark:bg-slate-800 ${
       completed ? "opacity-60" : ""
     }`}>
       {/* Priority dot */}

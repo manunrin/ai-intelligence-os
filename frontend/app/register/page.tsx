@@ -60,7 +60,7 @@ export default function RegisterPage() {
   );
 
   return (
-    <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6 dark:bg-slate-950">
+    <main className="min-h-screen bg-[var(--background)] flex items-center justify-center p-6 dark:bg-[var(--background)]">
       <div className="w-full max-w-md space-y-6">
         {/* Header */}
         <div className="text-center space-y-2">

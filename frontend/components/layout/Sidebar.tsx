@@ -140,7 +140,7 @@ export function Sidebar({ collapsed = false, onToggleCollapse, mobileOpen = fals
                 )}
                 {/* Active indicator — subtle left accent bar */}
                 {active && !collapsed && (
-                  <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-blue-500 dark:bg-blue-400" />
+                  <div className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-r-full bg-blue-500 dark:bg-blue-400" />
                 )}
               </div>
             );

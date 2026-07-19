@@ -8,9 +8,10 @@ import type { IntelligenceReport } from "@/types";
 interface ReportsPanelProps {
   reports: IntelligenceReport[];
   onCreate: () => void;
+  onView?: (report: IntelligenceReport) => void;
 }
 
-export function ReportsPanel({ reports, onCreate }: ReportsPanelProps) {
+export function ReportsPanel({ reports, onCreate, onView }: ReportsPanelProps) {
   return (
     <>
       <div className="flex items-center justify-between">
@@ -27,7 +28,7 @@ export function ReportsPanel({ reports, onCreate }: ReportsPanelProps) {
       ) : (
         <div className="space-y-2">
           {reports.slice().reverse().map((report) => (
-            <ReportRow key={report.id} report={report} />
+            <ReportRow key={report.id} report={report} onView={onView} />
           ))}
         </div>
       )}
@@ -35,7 +36,7 @@ export function ReportsPanel({ reports, onCreate }: ReportsPanelProps) {
   );
 }
 
-function ReportRow({ report }: { report: IntelligenceReport }) {
+function ReportRow({ report, onView }: { report: IntelligenceReport; onView?: (report: IntelligenceReport) => void }) {
   return (
     <div className="group flex items-center gap-4 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition-all duration-150 ease-out hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
       {/* Icon */}
@@ -55,7 +56,11 @@ function ReportRow({ report }: { report: IntelligenceReport }) {
 
       {/* Actions */}
       <div className="flex items-center gap-1 opacity-0 transition-opacity duration-150 ease-out group-hover:opacity-100">
-        <Button size="sm" variant="outline" className="h-8 text-xs">View</Button>
+        {onView ? (
+          <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => onView(report)}>View</Button>
+        ) : (
+          <span className="h-8" />
+        )}
       </div>
     </div>
   );
