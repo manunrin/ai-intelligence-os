@@ -21,7 +21,7 @@ export function DashboardPanel({ articles, knowledgeItems, tasks, agentRuns }: D
       {/* Header row */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">AI Intelligence OS</h1>
+          <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">AI Intelligence OS</h2>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">Monitor your autonomous intelligence pipeline</p>
         </div>
         <div className="flex items-center gap-2">

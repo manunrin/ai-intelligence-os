@@ -15,7 +15,7 @@ export function ReportsPanel({ reports, onCreate, onView }: ReportsPanelProps) {
   return (
     <>
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-100">Intelligence Reports</h2>
+        <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Intelligence Reports</h2>
         <Button onClick={onCreate}>New Report</Button>
       </div>
 

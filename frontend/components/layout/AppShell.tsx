@@ -34,7 +34,7 @@ export function AppShell({ children }: AppShellProps) {
       {/* Desktop collapse toggle — positioned inline with sidebar edge */}
       <button
         type="button"
-        className={`hidden top-3 z-40 flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 shadow-sm transition-all duration-200 ease-out hover:bg-slate-50 hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2 md:flex dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700`}
+        className={`hidden top-3 z-40 flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-400 shadow-sm transition-all duration-200 ease-out hover:bg-slate-50 hover:text-slate-600 focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2 md:flex md:absolute`}
         style={{ left: `calc(${sidebarWidth}px + 8px)` }}
         onClick={toggleCollapse}
         aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}

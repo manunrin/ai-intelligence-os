@@ -137,7 +137,7 @@ export function AgentsPanel({ runs, isLoading }: AgentsPanelProps) {
   return (
     <>
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Agent Runs</h2>
+        <h2 className="text-xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">Agent Runs</h2>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshMutation.isPending}>
             {refreshMutation.isPending ? "Refreshing…" : "Refresh"}
