@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api, unwrap } from "@/lib/api";
-import type { KnowledgeItem, KnowledgeSearchResult } from "@/types";
+import { api, unwrap, unwrapSingle } from "@/lib/api";
+import type { KnowledgeItem, KnowledgeSearchResult, RAGResponse } from "@/types";
 
 export const knowledgeKeys = {
   all: ["knowledge"] as const,
@@ -67,6 +67,18 @@ export function useKnowledgeSearchMutation() {
     },
     onSuccess: (results) => {
       qc.setQueryData(["knowledge", "searchResults"], results);
+    },
+  });
+}
+
+export function useRAGQuery() {
+  return useMutation({
+    mutationFn: async (params: { query: string; limit?: number }) => {
+      const raw = await api.post<unknown>("/api/v1/knowledge/rag", {
+        query: params.query,
+        limit: params.limit ?? 5,
+      });
+      return unwrapSingle<RAGResponse>(raw);
     },
   });
 }
