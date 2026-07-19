@@ -33,7 +33,7 @@ describe("ToastProvider", () => {
     render(<TestConsumer />, { wrapper: ToastWrapper });
     fireEvent.click(screen.getByText("Notify"));
     await waitFor(() => {
-      const container = document.querySelector(".fixed.bottom-4");
+      const container = document.querySelector(".fixed.top-4");
       expect(container).toBeInTheDocument();
     });
   });
