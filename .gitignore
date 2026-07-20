@@ -65,3 +65,10 @@ grafana/dashboards/*.json
 
 # OS
 Thumbs.db
+
+# AI tools
+.claude/
+
+# Coverage reports
+.coverage
+coverage.xml
