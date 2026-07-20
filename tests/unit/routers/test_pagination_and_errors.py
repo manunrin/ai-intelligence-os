@@ -44,6 +44,10 @@ def _make_client() -> TestClient:
     # A1: session_factory must be callable that returns a real fake session
     app.state.session_factory = FakeSessionCtx
 
+    # Mock embedding and vector services for knowledge endpoints
+    app.state.embedding_client = MagicMock()
+    app.state.vector_service = MagicMock()
+
     async def mock_get_current_user():
         return fake_user
 

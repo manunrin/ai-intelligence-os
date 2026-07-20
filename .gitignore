@@ -41,6 +41,14 @@ pnpm-debug.log*
 .pnp/
 .pnp.js
 
+# Testing
+coverage/
+htmlcov/
+.pytest_cache/
+.tox/
+screenshots/
+test-results/
+
 # IDE
 .vscode/
 .idea/
@@ -49,17 +57,11 @@ pnpm-debug.log*
 *~
 .DS_Store
 
-# Testing
-coverage/
-htmlcov/
-.pytest_cache/
-.tox/
+# Monitoring
+grafana/dashboards/*.json
 
 # Docker
 *.pid
-
-# Monitoring
-grafana/dashboards/*.json
 
 # OS
 Thumbs.db

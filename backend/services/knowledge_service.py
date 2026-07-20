@@ -19,9 +19,17 @@ logger = logging.getLogger(__name__)
 class KnowledgeItemService:
     """Business logic for knowledge item CRUD operations (API layer)."""
 
-    def __init__(self, session: AsyncSession, event_publisher=None) -> None:
+    def __init__(
+        self,
+        session: AsyncSession,
+        event_publisher=None,
+        embedding_client=None,  # EmbeddingClient (lazy import)
+        vector_service=None,  # QdrantVectorService (lazy import)
+    ) -> None:
         self._repo = KnowledgeItemRepository(session)
         self._publisher = event_publisher
+        self._embedding_client = embedding_client
+        self._vector_service = vector_service
 
     async def list_knowledge_items(
         self, offset: int = 0, limit: int = 20, user_id: uuid.UUID | None = None
@@ -55,6 +63,7 @@ class KnowledgeItemService:
         }
         item = await self._repo.create(**kwargs)
         await self._publish_audit(AuditAction.CREATE, str(item.id), user_id=user_id)
+        await self._sync_embedding(item, data.content, data.kind, data.article_id, data.tags)
         return self._to_dict(item)
 
     async def update_knowledge_item(
@@ -68,6 +77,14 @@ class KnowledgeItemService:
         updated = await self._repo.update(uuid.UUID(item_id), **update_data)
         if updated is not None:
             await self._publish_audit(AuditAction.UPDATE, item_id, user_id=user_id)
+            if "content" in update_data:
+                await self._sync_embedding(
+                    updated,
+                    updated.content,
+                    updated.kind,
+                    updated.article_id,
+                    updated.tags,
+                )
         return self._to_dict(updated)
 
     async def delete_knowledge_item(
@@ -80,7 +97,51 @@ class KnowledgeItemService:
         success = await self._repo.delete(uuid.UUID(item_id))
         if success:
             await self._publish_audit(AuditAction.DELETE, item_id, user_id=user_id)
+            await self._delete_vector(str(existing.id))
         return success
+
+    async def _sync_embedding(
+        self,
+        item: Any,
+        content: str,
+        kind: str,
+        article_id: uuid.UUID | None,
+        tags: list[str],
+    ) -> None:
+        """Generate embedding and upsert to Qdrant if services are available."""
+        if self._embedding_client is None or self._vector_service is None:
+            return
+
+        try:
+            result = await self._embedding_client.embed(content)
+            item.embedding_model = result.model
+            item.embedding_dimension = len(result.embedding)
+
+            await self._vector_service.upsert([
+                type("QdrantPoint", (), {
+                    "id": str(item.id),
+                    "vector": result.embedding,
+                    "payload": {
+                        "title": getattr(item, "title", ""),
+                        "kind": kind,
+                        "article_id": str(article_id) if article_id else None,
+                        "tags": tags or [],
+                    },
+                })()
+            ])
+            logger.info("Embedded and upserted KnowledgeItem %s", item.id)
+        except Exception as exc:
+            logger.warning("Embedding failed for '%s': %s", getattr(item, "title", item_id), exc)
+
+    async def _delete_vector(self, item_id: str) -> None:
+        """Remove the Qdrant vector for a deleted knowledge item."""
+        if self._vector_service is None:
+            return
+        try:
+            await self._vector_service.delete([item_id])
+            logger.info("Deleted Qdrant point for KnowledgeItem %s", item_id)
+        except Exception as exc:
+            logger.warning("Failed to delete Qdrant point for %s: %s", item_id, exc)
 
     async def _publish_audit(self, action: AuditAction, resource_id: str, *, user_id: uuid.UUID | None = None) -> None:
         if self._publisher is None:

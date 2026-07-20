@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@playwright/test": "^1.61.1",
     "@tanstack/react-query": "^5.101.2",
     "next": "^15.1.0",
     "react": "^19.0.0",

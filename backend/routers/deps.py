@@ -159,12 +159,6 @@ def get_article_service(db=Depends(get_db)) -> "ArticleService":
     return ArticleService(db)
 
 
-def get_knowledge_service(db=Depends(get_db)) -> "KnowledgeItemService":
-    """Dependency: create KnowledgeItemService bound to request session."""
-    from ..services.knowledge_service import KnowledgeItemService
-    return KnowledgeItemService(db)
-
-
 def get_report_service(db=Depends(get_db)) -> "ReportService":
     """Dependency: create ReportService bound to request session."""
     from ..services.report_service import ReportService
@@ -246,3 +240,13 @@ def get_vector_service(request: Request) -> Any:
     if svc is None:
         raise RuntimeError("QdrantVectorService not initialized — check main.py startup")
     return svc
+
+
+def get_knowledge_service(
+    db=Depends(get_db),
+    embedding_client=Depends(get_embedding_client),
+    vector_service=Depends(get_vector_service),
+) -> "KnowledgeItemService":
+    """Dependency: create KnowledgeItemService bound to request session with embedding/vector services."""
+    from ..services.knowledge_service import KnowledgeItemService
+    return KnowledgeItemService(db, embedding_client=embedding_client, vector_service=vector_service)
