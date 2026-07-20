@@ -205,13 +205,25 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 
 ## Next Recommended Tasks
 
-### Phase 9 Remaining (next)
-1. Implement knowledge graph visualization — node-link diagram showing entity relationships
-2. Expose kind/tag filters on RAG endpoint for scoped retrieval
-3. Add streaming response support to RAG chat (SSE/WebSocket)
-4. Add GIN full-text index migration for PostgreSQL FTS performance at scale
+### Phase 9.6 — Stabilization & Runtime Completion (next)
 
-### Short-term
-5. Build frontend auth flow — login/register pages that store JWT tokens and attach to API requests
-6. Add pagination controls to all list views (knowledge, articles, tasks, reports)
-7. Implement per-tab loading/error states on dashboard
+Full roadmap: `docs/proposals/phase-9.6-roadmap.md`
+
+1. **Add LiteLLM Gateway to Docker Compose** (Priority 1, ~2–4 hrs) — unblocks RAG API and all LLM-dependent features; currently the single largest blocker to end-to-end verification
+2. **Complete frontend auth flow** (Priority 2, ~1–2 days) — wire existing login/register pages to backend auth endpoints, implement token storage and auto-attach headers
+3. **Phase 9 remaining items** (Priority 3):
+   - Expose kind/tag filters on RAG endpoint for scoped retrieval
+   - Add streaming response support to RAG chat (SSE)
+   - Add GIN full-text index migration for PostgreSQL FTS performance
+   - Knowledge graph visualization (timeboxed; defer if scope grows)
+4. **Pagination controls** (Priority 4, ~0.5–1 day) — reusable component wired into all list views
+
+### Phase 10 — External Integrations (deferred until 9.6 complete)
+
+See `docs/proposals/phase-10-roadmap.md` for detailed plan.
+
+High-priority items:
+- New data connectors (Hacker News RSS, arXiv API first; Twitter/X and LinkedIn require credentials)
+- Real notification channels (Email SMTP, Telegram Bot, Slack Webhook)
+- Bidirectional MCP sync (Notion page changes, Asana task completion, GitHub issue creation)
+- Add Prometheus/Grafana services to Docker Compose
