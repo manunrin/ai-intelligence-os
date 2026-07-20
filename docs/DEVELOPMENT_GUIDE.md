@@ -321,6 +321,18 @@ At the completion of every Phase or major milestone, update `docs/CURRENT_STATE.
 
 This keeps the project snapshot accurate so future work (and AI assistants) can understand the codebase state without digging through commit history.
 
+## Agent Execution Rules
+
+When working on milestones, follow these rules to keep progress moving and avoid wasting time on external blockers:
+
+1. **Stop debugging infrastructure issues after 2 failed attempts.** If an environment or infrastructure problem cannot be resolved in two attempts, document the limitation and move on.
+2. **Distinguish code defects from environment constraints.** Before spending effort on a failure, determine whether it is a bug in the code or an external dependency issue (missing credentials, unavailable service, OS limitation).
+3. **Do not repeatedly retry the same approach.** If a fix attempt produces the same error, stop and document rather than iterating without new information.
+4. **Prefer milestone completion over perfect verification.** A milestone is complete when the implemented functionality works within its intended scope. External verification gaps should be recorded, not allowed to block delivery.
+5. **Record known issues for external blockers.** When blocked by missing credentials, unavailable infrastructure, OS limitations, or third-party services, add a documented known issue and continue with the milestone.
+6. **Do not spend excessive time fixing external dependencies.** Only invest effort in external dependencies if they directly block core functionality. Peripheral tooling gaps should be documented and addressed later.
+7. **Keep implementation progress moving.** Unresolved external blockers should not prevent completing the current milestone. Ship what works, document what does not.
+
 ## Code Style
 
 ### Python
