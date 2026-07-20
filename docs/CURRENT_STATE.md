@@ -1,6 +1,6 @@
 # AI Intelligence OS — Current State
 
-**Last Updated:** 2026-07-19
+**Last Updated:** 2026-07-20
 **Version:** 0.1.0 Beta
 **Branch:** master (HEAD: `a345d29`)
 
@@ -72,6 +72,22 @@ Search retrieval upgraded from semantic-only to hybrid vector+keyword fusion:
 - **Parallel execution** — `asyncio.gather` runs both branches concurrently with per-branch exception isolation. Failure in one branch does not affect the other.
 - **New test coverage** — 13 new tests in `test_rag_retriever.py` covering RRF fusion, duplicate merging, score threshold filtering, custom weights, hybrid flow, and branch failure isolation.
 - **Test verification** — Full unit test suite passes: **489 tests passed**, including the new hybrid search tests and all existing knowledge/router tests.
+
+### Phase 9 E2E Verification — PARTIAL (2026-07-20)
+
+API-level verification completed using curl checks (Playwright E2E skipped due to WSL environment limitations):
+
+- ✅ **Backend health check** — `GET /api/health` returns `{status: "healthy", checks: {database: "healthy", bootstrap: "ready"}}`
+- ✅ **Hybrid search API** — `POST /api/v1/knowledge/search` returns results with proper structure including `knowledge_id`, `title`, `content`, `kind`, `score`, `tags`
+- ❌ **RAG API** — `POST /api/v1/knowledge/rag` returns `INTERNAL_SERVER_ERROR`
+  - **Root cause**: No LLM provider API key configured in backend environment
+  - Backend config shows `openai_api_key: ""`, `anthropic_api_key: ""`
+  - LiteLLM gateway (`litellm_gateway_url`) is configured but not deployed in Docker Compose
+  - Ollama is not available at `http://localhost:11434`
+  - Error log: `RuntimeError: LLMProvider not initialized — no API key configured`
+- ⚠️ **Playwright E2E** — Cannot run due to missing system libraries in WSL environment (e.g., `libnspr4.so`)
+  - Browser binaries installed but cannot launch without system dependencies
+  - This is an environment limitation, not a code issue
 
 ---
 
@@ -182,6 +198,8 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 13. **No standalone tasks page** — Tasks only visible as a tab in the main dashboard; `frontend/app/tasks/` directory is empty.
 14. **NotificationAgent path** — Located at `backend/agents/notification/agent.py` (subdirectory), not `backend/agents/notification_agent.py`.
 15. **Knowledge detail slide-over takes full width on mobile** — No responsive bottom-sheet fallback for narrow viewports.
+16. **RAG API fails without LLM provider key** — `POST /api/v1/knowledge/rag` returns 500 when no OpenAI/Anthropic/Ollama API key is configured. LiteLLM gateway is configured but not deployed in Docker Compose.
+17. **Playwright E2E cannot run in WSL** — Missing system libraries (`libnspr4.so`, etc.) prevent browser launch. Browser binaries are installed but require system dependencies. Verification must use API-level checks (curl) instead.
 
 ---
 
