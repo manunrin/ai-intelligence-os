@@ -41,6 +41,7 @@ async def lifespan(app: FastAPI):
     from .services.llm.router import LLMRouter
     from .services.llm.providers.openai import OpenAIProvider
     from .services.llm.providers.anthropic import AnthropicProvider
+    from .services.llm.providers.litellm import LiteLLMProvider
     from .services.llm.base import LLMProvider
     from .services.embedding.client import EmbeddingClient
     from .services.embedding.base import LLMGatewayEmbeddingProvider
@@ -52,11 +53,18 @@ async def lifespan(app: FastAPI):
     llm_router = LLMRouter()
 
     # Default chat provider (used by RAG generator)
+    # Priority: OpenAI > Anthropic > LiteLLM Gateway
     llm_provider: LLMProvider | None = None
     if settings.openai_api_key:
         llm_provider = OpenAIProvider(api_key=settings.openai_api_key)
     elif settings.anthropic_api_key:
         llm_provider = AnthropicProvider(api_key=settings.anthropic_api_key)
+    elif settings.litellm_gateway_url:
+        # LiteLLM Gateway as fallback when direct API keys are not configured
+        llm_provider = LiteLLMProvider(
+            api_base=settings.litellm_gateway_url,
+            api_key=settings.litellm_api_key or None,
+        )
 
     # Embedding client — wraps LLM router for vector generation
     embedding_provider = LLMGatewayEmbeddingProvider(llm_router)

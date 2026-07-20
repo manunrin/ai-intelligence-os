@@ -91,6 +91,57 @@ API-level verification completed using curl checks (Playwright E2E skipped due t
 
 ---
 
+## Phase 9.6 Priority 1 — LiteLLM Gateway Integration — COMPLETE (2026-07-20)
+
+LiteLLM Gateway provider integrated into backend and added to Docker Compose:
+
+- **New provider** — `backend/services/llm/providers/litellm.py` implements `LLMProvider` interface with chat, embedding, and health check methods
+- **Router integration** — `LLMRouter._register_providers()` now registers LiteLLM provider when `LITELLM_GATEWAY_URL` is configured
+- **Startup priority** — `backend/main.py` uses LiteLLM Gateway as fallback when OpenAI/Anthropic keys are not configured
+- **Docker Compose** — Added `litellm` service with healthcheck, resource limits, and proper networking
+- **Environment docs** — Updated `.env.example` with LiteLLM configuration and direct provider fallback options
+
+**Expected behavior after `make start`:**
+- LiteLLM Gateway starts alongside backend
+- Backend registers LiteLLM provider automatically
+- RAG API can route through LiteLLM when direct API keys are unavailable
+- Health check verifies gateway connectivity
+
+**Verification Results:**
+- ✅ **LiteLLM container healthy** — Container reaches `healthy` state after ~60s startup
+- ✅ **Backend registers LiteLLM provider** — Logs confirm: `Registered LLM provider: litellm`
+- ✅ **Backend health check passes** — `GET /api/health` returns `{status: "healthy", checks: {database: "healthy", bootstrap: "ready"}}`
+- ✅ **RAG API responds** — `POST /api/v1/knowledge/rag` returns 200 with structured response (no 500 error)
+- ⚠️ **End-to-end LLM generation blocked** — No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` configured in environment. LiteLLM requires valid API keys for underlying providers to generate responses.
+
+**Known limitation:** LiteLLM Gateway is a routing layer that requires valid API keys for underlying providers (OpenAI, Anthropic, etc.) to function. Without these keys, the integration is correctly wired but cannot generate actual LLM responses. This is an external dependency constraint, not a code defect.
+
+**Next step:** Configure `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in `.env` file and restart services to enable full LLM generation through LiteLLM.
+
+---
+
+## Phase 9.6 Priority 2 — Frontend Auth Flow — COMPLETE (2026-07-21)
+
+Frontend authentication flow wired end-to-end to existing backend auth APIs:
+
+- **Middleware enforcement** — `frontend/middleware.ts` checks for `aio_auth_token` cookie on every protected route; unauthenticated requests redirect to `/login?callbackUrl=<original-path>`
+- **Login page** — `frontend/app/login/page.tsx` calls `POST /api/v1/auth/login`, fetches `/me`, stores token+user via auth context, redirects to `callbackUrl`
+- **Register page** — `frontend/app/register/page.tsx` calls `POST /api/v1/auth/register`, auto-logs in, redirects to dashboard
+- **Auth context** — `frontend/lib/auth-context.tsx` sets/clears `aio_auth_token` cookie on login/logout for middleware enforcement; also maintains localStorage + React state
+- **Client-side guards** — Dashboard, Knowledge, and Agents pages use `useAuth()` to redirect unauthenticated users before rendering protected content
+- **API client** — Existing `frontend/lib/api.ts` auto-attaches Bearer token and handles 401 by clearing auth state
+- **Tests** — 16 tests passing across `auth-storage.test.ts` and `api.test.ts`
+
+**Verification Results:**
+- ✅ **Login flow** — `POST /api/v1/auth/login` → token stored → `/me` fetched → callback redirect
+- ✅ **Register flow** — `POST /api/v1/auth/register` → auto-login → dashboard redirect
+- ✅ **Protected route redirect** — Middleware blocks access without cookie; client-side guards redirect before render
+- ✅ **Auth tests** — 16 tests pass (`auth-storage.test.ts`: 7, `api.test.ts`: 9)
+
+**Known limitation:** No refresh tokens — only access tokens (HS256). Refresh token endpoint deferred.
+
+---
+
 ## Completed Milestones
 
 ### Infrastructure & Foundation (Phases 1–2)

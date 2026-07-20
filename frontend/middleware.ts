@@ -1,10 +1,8 @@
 /** Middleware to protect routes from unauthenticated access. */
 
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 const PUBLIC_PATHS = ["/login", "/register"];
-const PROTECTED_PREFIXES = [""]; // root path is protected
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -27,13 +25,16 @@ export function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Protected paths — check for token in cookie or header
-  // Since we use localStorage + setAuthToken, we can't read it in middleware.
-  // Instead, redirect to login for any non-public path.
-  // The client-side page will handle the actual auth check and redirect.
-  // This middleware is a server-side safety net.
+  // Check for auth cookie
+  const authToken = request.cookies.get("aio_auth_token")?.value;
 
-  // Allow the request through — client-side auth context handles the real protection
+  // If no auth cookie, redirect to login with callback URL
+  if (!authToken) {
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("callbackUrl", pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
   return NextResponse.next();
 }
 

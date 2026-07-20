@@ -65,6 +65,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(newToken);
     setUser(newUser);
     setAuthToken(newToken);
+
+    // Set cookie for middleware enforcement
+    document.cookie = `aio_auth_token=${newToken}; path=/; SameSite=Lax`;
   }, []);
 
   const logout = useCallback(() => {
@@ -72,6 +75,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(null);
     setUser(null);
     setAuthToken(null);
+
+    // Clear cookie for middleware enforcement
+    document.cookie = "aio_auth_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
   }, []);
 
   const refreshUser = useCallback(async () => {

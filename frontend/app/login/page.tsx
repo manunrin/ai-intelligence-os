@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useCallback, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -11,11 +11,13 @@ import type { User } from "@/lib/auth-context";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login } = useAuth();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const callbackUrl = searchParams.get("callbackUrl") || "/";
 
   const handleSubmit = useCallback(
     async (e: React.FormEvent) => {
@@ -33,14 +35,14 @@ export default function LoginPage() {
         const meRes = await api.get<unknown>("/api/v1/auth/me");
         const userData = await unwrapSingle<User>(meRes);
         login(access_token, userData);
-        router.push("/");
+        router.push(callbackUrl);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Login failed");
       } finally {
         setLoading(false);
       }
     },
-    [username, password, login, router]
+    [username, password, login, router, callbackUrl]
   );
 
   return (

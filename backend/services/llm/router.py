@@ -14,6 +14,7 @@ from ...trace import set_attr, start_span
 from .base import ChatMessage, ChatResponse, EmbeddingResponse, LLMProvider
 from .providers.anthropic import AnthropicProvider
 from .providers.compatible import CompatibleProvider
+from .providers.litellm import LiteLLMProvider
 from .providers.ollama import OllamaProvider
 from .providers.openai import OpenAIProvider
 
@@ -90,6 +91,13 @@ class LLMRouter:
             self.register(CompatibleProvider(
                 api_base=settings.compatible_api_base,
                 api_key=settings.compatible_api_key,
+            ))
+
+        # LiteLLM Gateway
+        if gateway_url := settings.litellm_gateway_url:
+            self.register(LiteLLMProvider(
+                api_base=gateway_url,
+                api_key=settings.litellm_api_key or None,
             ))
 
     def register(self, provider: LLMProvider) -> None:

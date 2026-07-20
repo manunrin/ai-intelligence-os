@@ -1,5 +1,8 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter, usePathname } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 import { AppShell } from "@/components/layout/AppShell";
 import { KnowledgePage } from "@/components/panels/KnowledgePage";
 import { useKnowledgeItems } from "@/hooks/useKnowledge";
@@ -13,6 +16,20 @@ import { KnowledgeFormBody } from "@/components/knowledge/KnowledgeForm";
 import { useState } from "react";
 
 export default function KnowledgeRoute() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace(`/login?callbackUrl=${encodeURIComponent(pathname)}`);
+    }
+  }, [isAuthenticated, isLoading, router, pathname]);
+
+  if (isLoading || !isAuthenticated) {
+    return null;
+  }
+
   const { toast } = useToast();
   const { data: items = [], isLoading: loading } = useKnowledgeItems();
   const deleteMutation = useDeleteKnowledge();
