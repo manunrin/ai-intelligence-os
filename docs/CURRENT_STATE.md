@@ -1,6 +1,6 @@
 # AI Intelligence OS — Current State
 
-**Last Updated:** 2026-07-20
+**Last Updated:** 2026-07-22
 **Version:** 0.1.0 Beta
 **Branch:** master (HEAD: `a345d29`)
 
@@ -139,6 +139,22 @@ Frontend authentication flow wired end-to-end to existing backend auth APIs:
 - ✅ **Auth tests** — 16 tests pass (`auth-storage.test.ts`: 7, `api.test.ts`: 9)
 
 **Known limitation:** No refresh tokens — only access tokens (HS256). Refresh token endpoint deferred.
+
+---
+
+## Phase 9.6 RAG Streaming & Runtime Integration — COMPLETE (2026-07-22)
+
+Runtime integration completing the hybrid RAG backend (embedding generation and RRF fusion documented under Phase 9 Auto Embedding and Phase 9.5 Hybrid Search Backend):
+
+- **SSE streaming RAG endpoint** — `POST /api/v1/knowledge/rag/stream` streams LLM-generated answers token-by-token via Server-Sent Events; frontend `RAGChat` consumes the stream.
+- **Embedding backfill tooling** — `scripts/backfill_embeddings.py` processes all `KnowledgeItem` rows, generates embeddings via the LiteLLM/Ollama pipeline, upserts to Qdrant, and stores model metadata. Supports `--force` to rebuild collection from scratch.
+
+**Runtime Verification Results:**
+- ✅ **Embeddings populated** — `scripts/backfill_embeddings.py --force` processed 3 knowledge items successfully; Qdrant collection contains 3 points.
+- ✅ **Keyword search works** — Exact-match query `"Qdrant"` returns all 3 items containing the term.
+- ✅ **Semantic search works** — Query `"AI agent platform architecture"` returns the Architecture item despite no exact keyword match.
+- ✅ **Qdrant vector search available** — Collection healthy, cosine distance configured, 1024-dim vectors indexed.
+- ⚠️ **Score visibility gap** — `SearchResult.hybrid_score`, `dense_score`, `keyword_score` fields exist in schema but router only exposes fused `score`; useful for debugging RRF weighting later.
 
 ---
 
