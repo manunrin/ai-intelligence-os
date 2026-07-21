@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
 
 from ..schemas.error import ErrorResponse
 from ..schemas.knowledge import KnowledgeItemResponse
@@ -268,4 +270,75 @@ async def rag_question_answering(
             query=body.query,
         ),
         error=None,
+    )
+
+
+@router.post(
+    "/rag/stream",
+    summary="RAG question answering (streaming)",
+    description="Stream RAG answers token by token via Server-Sent Events.",
+    operation_id="ragQuestionAnsweringStream",
+)
+@limiter.limit("50/hour")
+async def rag_question_answering_stream(
+    body: RAGRequest,
+    request: Request,
+    db=Depends(get_db),
+    embedding_client=Depends(get_embedding_client),
+    vector_service=Depends(get_vector_service),
+    llm_provider=Depends(get_llm_provider),
+):
+    """Perform streaming RAG question answering over knowledge items.
+
+    Uses RagRetriever to fetch relevant context, then RagGenerator to synthesize
+    an answer with LLM, streaming tokens as Server-Sent Events.
+    """
+    retriever = RagRetriever(
+        session=db,
+        embedding_client=embedding_client,
+        vector_service=vector_service,
+    )
+
+    context = await retriever.retrieve(
+        query=body.query,
+        limit=body.limit,
+        kind_filter=body.kind_filter,
+        tag_filter=body.tag_filter,
+    )
+
+    if not context:
+        async def empty_stream():
+            yield "data: {}\n\n"
+        return StreamingResponse(
+            empty_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    generator = RagGenerator(provider=llm_provider)
+
+    async def event_stream():
+        try:
+            async for event in generator.generate_stream(
+                query=body.query,
+                context=context,
+                system_prompt=body.system_prompt,
+            ):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as exc:
+            logger.warning("RAG streaming failed: %s", exc)
+            yield f"data: {json.dumps({'type': 'error', 'message': str(exc)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )

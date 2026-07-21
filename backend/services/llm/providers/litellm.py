@@ -52,8 +52,47 @@ class LiteLLMProvider(LLMProvider):
 
 
     async def stream(self, messages: list[ChatMessage], model: str, **kwargs: Any) -> AsyncIterator[str]:
-        """Stream a chat completion token by token."""
-        raise NotImplementedError("Streaming not implemented for this provider")
+        """Stream chat completion tokens via OpenAI-compatible SSE endpoint."""
+        import json as _json
+        async with self._client.stream(
+            "POST",
+            "/v1/chat/completions",
+            json={
+                "model": model,
+                "messages": self._to_openai_messages(messages),
+                "stream": True,
+                **kwargs,
+            },
+        ) as resp:
+            resp.raise_for_status()
+
+            buffer = ""
+            async for chunk in resp.aiter_text():
+                buffer += chunk
+
+                while "\n\n" in buffer:
+                    event_data, buffer = buffer.split("\n\n", 1)
+
+                    lines = event_data.strip().split("\n")
+                    data_lines: list[str] = []
+
+                    for line in lines:
+                        if line.startswith("data: "):
+                            data_lines.append(line[6:])
+
+                    if data_lines:
+                        try:
+                            chunk_data = _json.loads(data_lines[0])
+                            content = (
+                                chunk_data
+                                .get("choices", [{}])[0]
+                                .get("delta", {})
+                                .get("content")
+                            )
+                            if content:
+                                yield content
+                        except (_json.JSONDecodeError, IndexError):
+                            continue
 
     async def embedding(self, text: str, model: str = "text-embedding-3-small", **kwargs: Any) -> EmbeddingResponse:
         resp = await self._client.post("/v1/embeddings", json={
