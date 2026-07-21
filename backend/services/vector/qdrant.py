@@ -36,7 +36,7 @@ class QdrantVectorService:
     """
 
     DEFAULT_COLLECTION = "knowledge_items"
-    DEFAULT_VECTOR_SIZE = 1536
+    DEFAULT_VECTOR_SIZE = 1024  # bge-m3 embedding dimension
 
     def __init__(
         self,
@@ -92,10 +92,11 @@ class QdrantVectorService:
                     {"id": p.id, "vector": p.vector, "payload": p.payload}
                     for p in points
                 ]
-                await self._client.post(
+                resp = await self._client.put(
                     f"/collections/{self._collection}/points",
                     json={"points": payloads},
                 )
+                resp.raise_for_status()
                 elapsed = _time.monotonic() - start
                 counter("vector_operations_total", labels={"operation": "upsert", "status": "success"})
                 histogram("vector_operation_duration_seconds", elapsed, labels={"operation": "upsert", "status": "success"})
@@ -104,6 +105,12 @@ class QdrantVectorService:
                 elapsed = _time.monotonic() - start
                 counter("vector_operations_total", labels={"operation": "upsert", "status": "failed"})
                 histogram("vector_operation_duration_seconds", elapsed, labels={"operation": "upsert", "status": "failed"})
+                if hasattr(exc, "response"):
+                    logger.error(
+                        "Qdrant upsert failed with status %s: %s",
+                        exc.response.status_code,
+                        exc.response.text,
+                    )
                 raise
 
     async def search(

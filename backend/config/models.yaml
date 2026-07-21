@@ -36,7 +36,7 @@ routing:
     - [ollama, mistral]
     - [compatible, qwen2.5]
 
-  # Embedding — cost-efficient
+  # Embedding — local bge-m3 via Ollama
   embedding:
+    - [ollama, bge-m3]
     - [openai, text-embedding-3-small]
-    - [compatible, bge-m3]

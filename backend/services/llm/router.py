@@ -166,7 +166,12 @@ class LLMRouter:
 
     async def embedding(self, text: str, *, model: str | None = None, **kwargs: Any) -> EmbeddingResponse:
         """Execute an embedding request with provider selection."""
-        provider_name, model_name = self._resolve_route(None, model) or (self._default_provider, self._default_model)
+        # For embeddings, use the "embedding" task route if no explicit model is given
+        if model is None:
+            provider_name, model_name = self._resolve_route("embedding", None) or (self._default_provider, self._default_model)
+        else:
+            provider_name, model_name = self._resolve_route(None, model) or (self._default_provider, self._default_model)
+
         provider = self._providers.get(provider_name)
         if provider is None:
             raise ValueError(f"Provider '{provider_name}' not registered")

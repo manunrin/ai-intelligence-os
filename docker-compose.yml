@@ -49,6 +49,7 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - LITELLM_GATEWAY_URL=http://litellm:4000
+      - OLLAMA_BASE_URL=http://ollama:11434
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - RATE_LIMIT_REQUESTS=${RATE_LIMIT_REQUESTS:-100}
       - RATE_LIMIT_WINDOW_SECONDS=${RATE_LIMIT_WINDOW_SECONDS:-3600}
@@ -61,6 +62,8 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+      ollama:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
       interval: 10s
@@ -129,7 +132,7 @@ services:
     container_name: aio-qdrant
     restart: unless-stopped
     environment:
-      - QDRANT__SERVICE__API_KEY=${QDRANT_API_KEY:-}
+      - QDRANT__SERVICE__AUTH_TOKEN=${QDRANT_AUTH_TOKEN:-}
     volumes:
       - qdrant_data:/qdrant/storage
     ports:
@@ -174,12 +177,35 @@ services:
         limits:
           memory: 512M
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: aio-ollama
+    restart: unless-stopped
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - ai-intelligence-net
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/127.0.0.1/11434 && echo ok' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   litellm:
     image: ghcr.io/berriai/litellm:latest
     container_name: aio-litellm
     restart: unless-stopped
+    volumes:
+      - ./backend/config/litellm_config.yaml:/app/config.yaml:ro
     command: >
-      --model gpt-4o
+      --config /app/config.yaml
       --port 4000
       --num_workers 4
       --max_budget 100
@@ -202,7 +228,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 2G
 
 volumes:
   postgres_data:
@@ -212,6 +238,8 @@ volumes:
   qdrant_data:
     driver: local
   minio_data:
+    driver: local
+  ollama_data:
     driver: local
 
 networks:

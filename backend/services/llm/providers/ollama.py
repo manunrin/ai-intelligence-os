@@ -59,8 +59,12 @@ class OllamaProvider(LLMProvider):
         })
         resp.raise_for_status()
         data = resp.json()
-        embedding = data.get("embedding", [])
-        return EmbeddingResponse(embeddings=[[embedding]] if embedding else [], raw=data)
+        # Ollama returns embeddings as a nested list: {"embeddings": [[...]]}
+        embeddings = data.get("embeddings", [])
+        if not embeddings:
+            return EmbeddingResponse(embeddings=[], raw=data)
+        # Return as list of lists for consistency with other providers
+        return EmbeddingResponse(embeddings=embeddings, raw=data)
 
     async def health_check(self) -> bool:
         try:

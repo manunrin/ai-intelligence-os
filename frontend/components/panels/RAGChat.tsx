@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import type { RAGResponse } from "@/types";
-import { useRAGQuery } from "@/hooks/useKnowledge";
+import { useRAGStream } from "@/hooks/useKnowledge";
 import { useToast } from "@/lib/toast";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -13,62 +13,120 @@ interface Message {
   content: string;
   sources?: Array<{ knowledge_id: string; title: string }>;
   query?: string;
+  status: "streaming" | "done" | "error";
 }
 
 export function RAGChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
   const [selectedKind, setSelectedKind] = useState<string | null>(null);
-  const { mutateAsync, isPending } = useRAGQuery();
+  const { isStreaming, start: startStream, stop: stopStream } = useRAGStream();
   const { toast } = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const assistantMsgIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, isTyping]);
+  }, [messages, isStreaming]);
 
-  const handleSend = async () => {
+  const appendAssistantContent = useCallback(
+    (content: string) => {
+      if (!assistantMsgIdRef.current) return;
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMsgIdRef.current
+            ? { ...msg, content: msg.content + content }
+            : msg
+        )
+      );
+    },
+    []
+  );
+
+  const finalizeAssistantMessage = useCallback(
+    (sources: Array<{ knowledge_id: string; title: string }>) => {
+      if (!assistantMsgIdRef.current) return;
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMsgIdRef.current
+            ? { ...msg, status: "done", sources }
+            : msg
+        )
+      );
+      assistantMsgIdRef.current = null;
+    },
+    []
+  );
+
+  const handleError = useCallback(
+    (message: string) => {
+      if (assistantMsgIdRef.current) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantMsgIdRef.current
+              ? { ...msg, status: "error" as const, content: msg.content || message }
+              : msg
+          )
+        );
+        assistantMsgIdRef.current = null;
+      }
+      toast(message, "error");
+    },
+    [toast]
+  );
+
+  const handleSend = () => {
     const question = input.trim();
-    if (!question || isPending) return;
+    if (!question || isStreaming) return;
 
     const userMsg: Message = {
       id: `user-${Date.now()}`,
       role: "user",
       content: question,
+      status: "done",
     };
 
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
-    setIsTyping(true);
 
-    try {
-      const response: RAGResponse = await mutateAsync({
-        query: question,
-        kind_filter: selectedKind,
-      });
+    const assistantMsgId = `assistant-${Date.now()}`;
+    const assistantMsg: Message = {
+      id: assistantMsgId,
+      role: "assistant",
+      content: "",
+      status: "streaming",
+      query: question,
+    };
+    setMessages((prev) => [...prev, assistantMsg]);
+    assistantMsgIdRef.current = assistantMsgId;
 
-      const assistantMsg: Message = {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: response.answer,
-        sources: response.sources.length > 0 ? response.sources : undefined,
-      };
-
-      setMessages((prev) => [...prev, assistantMsg]);
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "RAG query failed", "error");
-    } finally {
-      setIsTyping(false);
-    }
+    startStream(question, selectedKind, null, {
+      onToken: appendAssistantContent,
+      onDone: finalizeAssistantMessage,
+      onError: handleError,
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
+    }
+  };
+
+  const handleStop = () => {
+    stopStream();
+    if (assistantMsgIdRef.current) {
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg.id === assistantMsgIdRef.current
+            ? { ...msg, status: msg.content.length > 0 ? "done" : "error" }
+            : msg
+        )
+      );
+      assistantMsgIdRef.current = null;
     }
   };
 
@@ -98,10 +156,20 @@ export function RAGChat() {
             </div>
           ) : (
             <div key={msg.id} className="space-y-2">
-              <div className="max-w-[85%] rounded-2xl bg-slate-100 px-4 py-2.5 text-sm text-slate-900 dark:bg-slate-800 dark:text-slate-100 shadow-sm">
-                {msg.content}
+              <div className="max-w-[85%] rounded-2xl bg-slate-100 px-4 py-2.5 text-sm text-slate-900 dark:bg-slate-800 dark:text-slate-100 shadow-sm whitespace-pre-wrap">
+                {msg.content || (
+                  <span className="inline-block h-4 w-2 animate-pulse rounded bg-slate-400" />
+                )}
+                {msg.status === "streaming" && (
+                  <span className="ml-0.5 inline-block h-4 w-2 animate-pulse rounded bg-slate-400" />
+                )}
               </div>
-              {msg.sources && msg.sources.length > 0 && (
+              {msg.status === "error" && (
+                <p className="max-w-[85%] text-xs text-red-600 dark:text-red-400">
+                  Stream failed. Please try again.
+                </p>
+              )}
+              {msg.sources && msg.sources.length > 0 && msg.status === "done" && (
                 <div className="max-w-[85%]">
                   <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Sources
@@ -121,14 +189,6 @@ export function RAGChat() {
               )}
             </div>
           )
-        )}
-
-        {isTyping && (
-          <div className="flex items-center gap-1.5 px-4 py-3">
-            <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [--animation-delay:0ms]" />
-            <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [--animation-delay:150ms]" />
-            <span className="h-2 w-2 animate-bounce rounded-full bg-slate-400 [--animation-delay:300ms]" />
-          </div>
         )}
       </div>
 
@@ -162,12 +222,18 @@ export function RAGChat() {
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask a question..."
-            disabled={isPending}
+            disabled={isStreaming}
             className="flex-1"
           />
-          <Button type="submit" disabled={isPending || !input.trim()}>
-            Send
-          </Button>
+          {isStreaming ? (
+            <Button type="button" variant="outline" onClick={handleStop}>
+              Stop
+            </Button>
+          ) : (
+            <Button type="submit" disabled={!input.trim()}>
+              Send
+            </Button>
+          )}
         </form>
       </div>
     </div>
