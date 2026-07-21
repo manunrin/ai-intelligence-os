@@ -210,20 +210,20 @@ def get_session_factory():
 
 # ── AI infrastructure dependencies ──────────────────────────────────────
 
-def get_llm_router(request: Request) -> Any:
-    """Dependency: return the LLMRouter singleton from app state."""
-    router = getattr(request.app.state, 'llm_router', None)
-    if router is None:
-        raise RuntimeError("LLMRouter not initialized — check main.py startup")
-    return router
-
-
 def get_llm_provider(request: Request) -> Any:
     """Dependency: return the default chat LLMProvider singleton from app state."""
     provider = getattr(request.app.state, 'llm_provider', None)
     if provider is None:
         raise RuntimeError("LLMProvider not initialized — no API key configured")
     return provider
+
+
+def get_llm_router(request: Request) -> Any:
+    """Dependency: return the LLMRouter singleton from app state."""
+    router = getattr(request.app.state, 'llm_router', None)
+    if router is None:
+        raise RuntimeError("LLMRouter not initialized — check main.py startup")
+    return router
 
 
 def get_embedding_client(request: Request) -> Any:

@@ -15,7 +15,7 @@ from ..schemas.knowledge_create import KnowledgeItemCreate, KnowledgeItemUpdate
 from ..schemas.response import APIResponse
 from ..schemas.rag import RAGRequest, RAGResponse, RAGSource
 from ..schemas.search import SearchRequest, SearchResponse, SearchResult
-from .deps import get_current_user, get_db, get_embedding_client, get_knowledge_service, get_llm_provider, get_vector_service
+from .deps import get_current_user, get_db, get_embedding_client, get_knowledge_service, get_llm_provider, get_llm_router, get_vector_service
 from .pagination import PaginationParams, get_pagination
 from ..services.knowledge_service import KnowledgeItemService
 from ..services.rag.generator import RagGenerator
@@ -203,13 +203,12 @@ async def rag_question_answering(
     db=Depends(get_db),
     embedding_client=Depends(get_embedding_client),
     vector_service=Depends(get_vector_service),
-    llm_provider=Depends(get_llm_provider),
+    llm_router=Depends(get_llm_router),
 ):
     """Perform RAG question answering over knowledge items.
 
     Uses RagRetriever to fetch relevant context, then RagGenerator to synthesize
-    an answer with LLM. Falls back to keyword search if embedding or vector store
-    is unavailable.
+    an answer with LLM via LLMRouter (with fallback chain).
     """
     retriever = RagRetriever(
         session=db,
@@ -236,8 +235,8 @@ async def rag_question_answering(
             error=None,
         )
 
-    # Generate answer
-    generator = RagGenerator(provider=llm_provider)
+    # Generate answer through LLMRouter
+    generator = RagGenerator(provider_or_router=llm_router)
 
     try:
         result = await generator.generate(
@@ -286,12 +285,12 @@ async def rag_question_answering_stream(
     db=Depends(get_db),
     embedding_client=Depends(get_embedding_client),
     vector_service=Depends(get_vector_service),
-    llm_provider=Depends(get_llm_provider),
+    llm_router=Depends(get_llm_router),
 ):
     """Perform streaming RAG question answering over knowledge items.
 
     Uses RagRetriever to fetch relevant context, then RagGenerator to synthesize
-    an answer with LLM, streaming tokens as Server-Sent Events.
+    an answer with LLM via LLMRouter (with fallback chain), streaming tokens as SSE.
     """
     retriever = RagRetriever(
         session=db,
@@ -319,7 +318,7 @@ async def rag_question_answering_stream(
             },
         )
 
-    generator = RagGenerator(provider=llm_provider)
+    generator = RagGenerator(provider_or_router=llm_router)
 
     async def event_stream():
         try:

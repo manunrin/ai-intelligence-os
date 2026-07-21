@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 
 import yaml
 
@@ -163,6 +163,56 @@ class LLMRouter:
             provider, model_name, messages,
             temperature=temperature, max_tokens=max_tokens, **kwargs,
         )
+
+    async def stream(
+        self,
+        messages: list[ChatMessage],
+        *,
+        task: str | None = None,
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        """Stream a chat completion with automatic routing and fallback.
+
+        Tries primary provider first. Falls back to full response only if no
+        tokens were yielded yet. If streaming fails after partial output, the
+        error propagates immediately to avoid duplicated responses.
+        """
+        route = self._resolve_route(task, model)
+        if route is None:
+            raise ValueError(f"No route found for task={task}, model={model}")
+
+        provider_name, model_name = route
+        provider = self._providers.get(provider_name)
+        if provider is None:
+            raise ValueError(f"Provider '{provider_name}' not registered")
+
+        tokens_yielded = False
+        try:
+            async for token in provider.stream(messages, model=model_name, **kwargs):
+                tokens_yielded = True
+                yield token
+            return
+        except Exception as exc:
+            if tokens_yielded:
+                logger.warning("Streaming failed after partial output from '%s', propagating error", provider.name)
+                raise
+            logger.warning("Primary provider '%s' failed during streaming before yielding tokens: %s", provider.name, exc)
+
+        # Fallback: try full chat response if no tokens were streamed
+        logger.info("Falling back to full response from provider '%s'", provider.name)
+        try:
+            response = await self._execute_with_fallback(
+                provider, model_name, messages,
+                temperature=temperature, max_tokens=max_tokens, **kwargs,
+            )
+            if response.content:
+                yield response.content
+        except Exception as exc:
+            logger.error("Fallback chat failed: %s", exc)
+            raise
 
     async def embedding(self, text: str, *, model: str | None = None, **kwargs: Any) -> EmbeddingResponse:
         """Execute an embedding request with provider selection."""

@@ -6,6 +6,7 @@ import logging
 from typing import Any, AsyncIterator
 
 from ..llm.base import ChatMessage, ChatRole, LLMProvider
+from ..llm.router import LLMRouter
 
 logger = logging.getLogger(__name__)
 
@@ -13,16 +14,11 @@ logger = logging.getLogger(__name__)
 class RagGenerator:
     """Generates answers by combining retrieved context with LLM inference.
 
-    Usage:
-        generator = RagGenerator(provider)
-        answer = await generator.generate(
-            query="What are the latest AI developments?",
-            context=[retrieval_result1, retrieval_result2],
-        )
+    Accepts either an LLMProvider or LLMRouter instance. Both expose .chat() and .stream().
     """
 
-    def __init__(self, provider: LLMProvider, model: str = "gpt-4o") -> None:
-        self._provider = provider
+    def __init__(self, provider_or_router: LLMProvider | LLMRouter, model: str = "gpt-4o") -> None:
+        self._provider_or_router = provider_or_router
         self._model = model
 
     async def generate(
@@ -56,7 +52,7 @@ class RagGenerator:
             ChatMessage(role=ChatRole.USER, content=self._build_user_message(query, context)),
         ]
 
-        response = await self._provider.chat(messages, model=self._model, **kwargs)
+        response = await self._provider_or_router.chat(messages, model=self._model, **kwargs)
 
         sources = [
             {"knowledge_id": ctx.knowledge_id, "title": ctx.title}
@@ -108,12 +104,12 @@ class RagGenerator:
         ]
 
         try:
-            async for token in self._provider.stream(messages, model=self._model, **kwargs):
+            async for token in self._provider_or_router.stream(messages, model=self._model, **kwargs):
                 yield {"type": "token", "content": token}
         except NotImplementedError:
-            logger.info("Provider %s does not support streaming, falling back to full response", self._provider.name)
+            logger.info("Provider %s does not support streaming, falling back to full response", self._provider_or_router.name)
             try:
-                response = await self._provider.chat(messages, model=self._model, **kwargs)
+                response = await self._provider_or_router.chat(messages, model=self._model, **kwargs)
                 full_text = response.content or ""
                 if full_text:
                     yield {"type": "token", "content": full_text}

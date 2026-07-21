@@ -13,7 +13,7 @@ from backend.main import create_app
 
 
 class MockLLMProvider:
-    """Minimal mock LLM provider that streams tokens."""
+    """Minimal mock LLM provider that streams tokens. Also works as a mock router."""
 
     name = "mock_llm"
 
@@ -50,7 +50,7 @@ def _make_retrieval_result(kid, title):
 
 @pytest.fixture
 def client_with_mocks():
-    """TestClient with mocked LLM provider and retriever."""
+    """TestClient with mocked LLM router and retriever."""
     fake_user = MagicMock()
     fake_user.id = "test-user-id"
     fake_user.username = "testuser"
@@ -59,12 +59,12 @@ def client_with_mocks():
 
     app = create_app()
 
-    from backend.routers.deps import get_current_user, get_llm_provider, get_db, get_embedding_client, get_vector_service
+    from backend.routers.deps import get_current_user, get_llm_router, get_db, get_embedding_client, get_vector_service
 
     async def mock_get_current_user():
         return fake_user
 
-    async def mock_get_llm_provider():
+    async def mock_get_llm_router():
         return MockLLMProvider(["Hello ", "world", "!"])
 
     # Mock AI infrastructure dependencies that require app startup
@@ -75,7 +75,7 @@ def client_with_mocks():
         return MagicMock()
 
     app.dependency_overrides[get_current_user] = mock_get_current_user
-    app.dependency_overrides[get_llm_provider] = mock_get_llm_provider
+    app.dependency_overrides[get_llm_router] = mock_get_llm_router
     app.dependency_overrides[get_embedding_client] = mock_get_embedding_client
     app.dependency_overrides[get_vector_service] = mock_get_vector_service
 
@@ -184,7 +184,7 @@ def test_stream_empty_context(client_with_mocks):
 
 def test_stream_error_handling(client_with_mocks):
     """Verify error events are properly formatted."""
-    from backend.routers.deps import get_llm_provider
+    from backend.routers.deps import get_llm_router
     from backend.services.rag.retriever import RagRetriever
 
     class FailingProvider(MockLLMProvider):
@@ -194,7 +194,7 @@ def test_stream_error_handling(client_with_mocks):
     async def mock_get_failing_provider():
         return FailingProvider([])
 
-    client_with_mocks.app.dependency_overrides[get_llm_provider] = mock_get_failing_provider
+    client_with_mocks.app.dependency_overrides[get_llm_router] = mock_get_failing_provider
 
     resp = client_with_mocks.post(
         "/api/v1/knowledge/rag/stream",
