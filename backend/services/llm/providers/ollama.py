@@ -47,6 +47,11 @@ class OllamaProvider(LLMProvider):
             raw=data,
         )
 
+
+    async def stream(self, messages: list[ChatMessage], model: str, **kwargs: Any) -> AsyncIterator[str]:
+        """Stream a chat completion token by token."""
+        raise NotImplementedError("Streaming not implemented for this provider")
+
     async def embedding(self, text: str, model: str = "nomic-embed-text", **kwargs: Any) -> EmbeddingResponse:
         resp = await self._client.post("/api/embed", json={
             "model": model,

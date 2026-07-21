@@ -215,10 +215,12 @@ async def rag_question_answering(
         vector_service=vector_service,
     )
 
-    # Retrieve context
+    # Retrieve context with optional kind/tag filters
     context = await retriever.retrieve(
         query=body.query,
         limit=body.limit,
+        kind_filter=body.kind_filter,
+        tag_filter=body.tag_filter,
     )
 
     if not context:

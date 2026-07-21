@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Any
+from typing import Any, AsyncIterator
 
 import httpx
 
@@ -35,6 +36,49 @@ class _OpenAIClient:
         })
         resp.raise_for_status()
         return resp.json()
+
+    async def stream_chat(
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        """Stream chat completion tokens from OpenAI SSE endpoint."""
+        async with self._client.stream(
+            "POST",
+            "/chat/completions",
+            json={
+                "model": model,
+                "messages": messages,
+                "stream": True,
+                **kwargs,
+            },
+        ) as resp:
+            resp.raise_for_status()
+
+            async for line in resp.aiter_lines():
+                if not line:
+                    continue
+
+                if not line.startswith("data: "):
+                    continue
+
+                data = line[6:]
+
+                if data == "[DONE]":
+                    break
+
+                chunk = json.loads(data)
+
+                content = (
+                    chunk
+                    .get("choices", [{}])[0]
+                    .get("delta", {})
+                    .get("content")
+                )
+
+                if content:
+                    yield content
 
     async def embedding(self, model: str, input_text: str, **kwargs: Any) -> dict[str, Any]:
         resp = await self._client.post("/embeddings", json={
@@ -98,6 +142,13 @@ class OpenAIProvider(LLMProvider):
         usage = data.get("usage", {})
         finish_reason = choices[0].get("finish_reason") if choices else None
         return ChatResponse(content=content, finish_reason=finish_reason, usage=usage, raw=data)
+
+    async def stream(self, messages: list[ChatMessage], model: str, **kwargs: Any) -> AsyncIterator[str]:
+        """Stream a chat completion token by token."""
+        client = self._get_client()
+        openai_msgs = self._to_openai_messages(messages)
+        async for chunk in client.stream_chat(model=model, messages=openai_msgs, **kwargs):
+            yield chunk
 
     async def embedding(self, text: str, model: str = "text-embedding-3-small", **kwargs: Any) -> EmbeddingResponse:
         client = self._get_client()

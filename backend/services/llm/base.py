@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, AsyncIterator
 
 
 class ChatRole(str, Enum):
@@ -63,6 +63,19 @@ class LLMProvider(ABC):
 
         Returns:
             ChatResponse with assistant's reply.
+        """
+
+    @abstractmethod
+    async def stream(self, messages: list[ChatMessage], model: str, **kwargs: Any) -> AsyncIterator[str]:
+        """Stream a chat completion token by token.
+
+        Args:
+            messages: Ordered list of chat messages.
+            model: Model identifier to use.
+            **kwargs: Provider-specific parameters.
+
+        Yields:
+            String chunks of the assistant's response.
         """
 
     @abstractmethod

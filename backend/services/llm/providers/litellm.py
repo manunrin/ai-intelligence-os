@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, AsyncIterator
 
 import httpx
 
@@ -49,6 +49,11 @@ class LiteLLMProvider(LLMProvider):
         usage = data.get("usage", {})
         finish_reason = choices[0].get("finish_reason") if choices else None
         return ChatResponse(content=content, finish_reason=finish_reason, usage=usage, raw=data)
+
+
+    async def stream(self, messages: list[ChatMessage], model: str, **kwargs: Any) -> AsyncIterator[str]:
+        """Stream a chat completion token by token."""
+        raise NotImplementedError("Streaming not implemented for this provider")
 
     async def embedding(self, text: str, model: str = "text-embedding-3-small", **kwargs: Any) -> EmbeddingResponse:
         resp = await self._client.post("/v1/embeddings", json={

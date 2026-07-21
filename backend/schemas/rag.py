@@ -13,6 +13,8 @@ class RAGRequest(BaseModel):
     query: str = Field(..., min_length=1, description="User's question")
     limit: int = Field(default=5, ge=1, le=20, description="Maximum context items to retrieve")
     system_prompt: Optional[str] = Field(default=None, description="Custom system prompt for the LLM")
+    kind_filter: Optional[str] = Field(default=None, description="Restrict retrieval to a knowledge kind (e.g. article, report, concept)")
+    tag_filter: Optional[str] = Field(default=None, description="Restrict retrieval to items with this tag")
 
 
 class RAGSource(BaseModel):

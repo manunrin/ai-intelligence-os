@@ -73,10 +73,17 @@ export function useKnowledgeSearchMutation() {
 
 export function useRAGQuery() {
   return useMutation({
-    mutationFn: async (params: { query: string; limit?: number }) => {
+    mutationFn: async (params: {
+      query: string;
+      limit?: number;
+      kind_filter?: string | null;
+      tag_filter?: string | null;
+    }) => {
       const raw = await api.post<unknown>("/api/v1/knowledge/rag", {
         query: params.query,
         limit: params.limit ?? 5,
+        kind_filter: params.kind_filter,
+        tag_filter: params.tag_filter,
       });
       return unwrapSingle<RAGResponse>(raw);
     },

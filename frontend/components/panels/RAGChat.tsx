@@ -19,6 +19,7 @@ export function RAGChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
+  const [selectedKind, setSelectedKind] = useState<string | null>(null);
   const { mutateAsync, isPending } = useRAGQuery();
   const { toast } = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -44,7 +45,10 @@ export function RAGChat() {
     setIsTyping(true);
 
     try {
-      const response: RAGResponse = await mutateAsync({ query: question });
+      const response: RAGResponse = await mutateAsync({
+        query: question,
+        kind_filter: selectedKind,
+      });
 
       const assistantMsg: Message = {
         id: `assistant-${Date.now()}`,
@@ -130,6 +134,22 @@ export function RAGChat() {
 
       {/* Input bar */}
       <div className="border-t border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-900/50">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="text-xs font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+            Scope:
+          </span>
+          <button
+            type="button"
+            onClick={() => setSelectedKind(null)}
+            className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-150 cursor-pointer ${
+              selectedKind === null
+                ? "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
+                : "bg-slate-200 text-slate-600 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
+            }`}
+          >
+            All kinds
+          </button>
+        </div>
         <form
           onSubmit={(e) => {
             e.preventDefault();

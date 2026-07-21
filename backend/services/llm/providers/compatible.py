@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import logging
-from typing import Any
+from typing import Any, AsyncIterator
 
 import httpx
 
@@ -60,6 +61,11 @@ class CompatibleProvider(LLMProvider):
             usage=usage,
             raw=data,
         )
+
+
+    async def stream(self, messages: list[ChatMessage], model: str, **kwargs: Any) -> AsyncIterator[str]:
+        """Stream a chat completion token by token."""
+        raise NotImplementedError("Streaming not implemented for this provider")
 
     async def embedding(self, text: str, model: str | None = None, **kwargs: Any) -> EmbeddingResponse:
         model = model or self._default_model
