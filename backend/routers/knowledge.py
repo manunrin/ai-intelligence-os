@@ -307,7 +307,7 @@ async def rag_question_answering_stream(
 
     if not context:
         async def empty_stream():
-            yield "data: {}\n\n"
+            yield f"data: {json.dumps({'type': 'done', 'sources': [], 'message': 'No relevant knowledge items found.'}, ensure_ascii=False)}\n\n"
         return StreamingResponse(
             empty_stream(),
             media_type="text/event-stream",

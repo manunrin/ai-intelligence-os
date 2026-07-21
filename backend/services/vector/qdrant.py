@@ -64,18 +64,36 @@ class QdrantVectorService:
             resp = await self._client.get(f"/collections/{self._collection}")
             if resp.status_code == 200:
                 return
-        except Exception:
-            pass
+            if resp.status_code == 404:
+                pass  # Collection does not exist; create it below.
+            else:
+                resp.raise_for_status()
+                return
+        except httpx.HTTPError as exc:
+            logger.error(
+                "Failed to check Qdrant collection '%s': %s",
+                self._collection,
+                exc,
+            )
+            raise
 
-        await self._client.put(
-            f"/collections/{self._collection}",
-            json={
-                "vectors": {
-                    "size": self._vector_size,
-                    "distance": "Cosine",
-                }
-            },
-        )
+        try:
+            await self._client.put(
+                f"/collections/{self._collection}",
+                json={
+                    "vectors": {
+                        "size": self._vector_size,
+                        "distance": "Cosine",
+                    }
+                },
+            )
+        except httpx.HTTPStatusError as exc:
+            logger.error(
+                "Failed to create Qdrant collection '%s': %s",
+                self._collection,
+                exc.response.text,
+            )
+            raise
         logger.info("Created Qdrant collection '%s' (%d-dim)", self._collection, self._vector_size)
 
     async def upsert(self, points: list[QdrantPoint]) -> None:
