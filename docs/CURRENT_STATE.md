@@ -182,6 +182,30 @@ Full stabilization of Phase 9.6 runtime features completed across backend and fr
 - ⚠️ **Score visibility gap** — `SearchResult.hybrid_score`, `dense_score`, `keyword_score` fields exist in schema but router only exposes fused `score`; useful for debugging RRF weighting later.
 - ⚠️ **End-to-end LLM generation blocked** — No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` configured in environment. LiteLLM requires valid API keys for underlying providers to generate responses. This is an external dependency constraint, not a code defect.
 
+### Phase 10.2.1 — Resume Interrupted Agent (COMPLETE — 2026-07-22)
+
+**Completed tasks:**
+
+- **Backend `resume()` method** — `AgentRuntimeService.resume(run_id, user_id)` validates run is in `"interrupted"` status, loads checkpoint state via `checkpointer.aget()`, extracts `channel_values` from persisted checkpoint, updates run record back to `status="running"` / `stage="resuming"`, dispatches `_execute_run()` with same `thread_id=f"agent-run-{run_id}"` so LangGraph continues from saved state. Falls back to original `input_payload` if checkpoint load fails.
+- **API endpoint** — `POST /agents/runs/{run_id}/resume` in `backend/routers/agents.py` with rate limiting (`20/hour`), returns updated run dict.
+- **Frontend hook** — `useResumeAgentRun()` mutation in `frontend/hooks/useAgentRuns.ts` follows existing cancel/submit patterns, invalidates runs list and detail queries on success.
+- **Frontend UI** — Amber "Resume" button in `AgentsPanel.tsx` visible only for `"interrupted"` runs, wired to `resumeMutation`, disabled during execution.
+- **Unit tests** — 5 new tests in `test_agent_runtime.py`: nonexistent run raises `AgentRunNotFoundError`, non-interrupted status raises `ValueError`, no checkpointer falls back to input_payload, checkpoint state loading verified, status update confirmed. Also fixed existing mock to include `session.refresh`.
+- **Tests passing:** 16/16 across all runtime service tests. No new TypeScript errors.
+
+**Final commit:**
+
+| Commit | Message |
+|--------|---------|
+| `e8cf0fd` | feat: add resume for interrupted agent runs (Phase 10.2.1) + test fixes |
+
+**Known limitations:**
+
+- Resume requires active checkpointer; if checkpointer unavailable at startup, fallback uses original input_payload (not true checkpoint state).
+- Resume reuses same run_id — the run record is updated in-place rather than creating a new record with parent link.
+- Resume does not validate that the checkpoint's pipeline type matches the original submission (relies on `_agent_type` in payload).
+- Frontend shows Resume only for `"interrupted"` status — recovered runs (also marked `"warning"`) do not get a Resume action.
+
 ---
 
 ## Phase 10 — External Integrations (IN PROGRESS)
@@ -226,7 +250,6 @@ Full stabilization of Phase 9.6 runtime features completed across backend and fr
 
 - End-to-end agent run submission not yet tested against live pipeline — need to submit a real run, verify checkpoint written to PostgreSQL, and confirm recovery scan detects it correctly.
 - Recovery scan currently uses a fixed 24-hour window; may need tuning based on operational experience.
-- Resume API not implemented — interrupted runs cannot be resumed from checkpoint yet.
 - No Prometheus/Grafana dashboards for agent runtime metrics.
 
 ---
@@ -295,7 +318,7 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 2. **No frontend auth UI** — Login forms, token storage, auto-attach headers not yet wired to backend auth.
 3. **Pagination UI missing** — Backend supports offset/limit but frontend has no pagination controls.
 4. **Report PUT/DELETE not implemented** — Out of scope for Phase 6-D.1.
-5. **Agent run creates record only** — Workflow execution triggered but not wired to LangGraph runner. *(Partially addressed in Phase 10.1: thread_id generation, checkpointer wiring, migration, recovery scan, and frontend updates all completed. End-to-end verification still pending.)*
+5. **Agent run creates record only** — Workflow execution triggered but not wired to LangGraph runner. *(Phase 10.1: thread_id generation, checkpointer wiring, migration, recovery scan, resume API, and frontend updates all completed. End-to-end live pipeline test still pending.)*
 6. **No per-tab loading states** — Dashboard shows all-or-nothing loading.
 7. **No error boundaries** — Individual sections don't recover independently.
 8. **LiteLLM Gateway not deployed** — Configured in docker-compose.yml but litellm service not included.
@@ -316,6 +339,6 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 ### Phase 10.2 — Next Steps
 
 - End-to-end agent run: submit a real run, verify checkpoint written to PostgreSQL, confirm recovery scan detects it correctly.
-- Implement resume API so interrupted runs can be resumed from their checkpoint.
+- Test resume API end-to-end: submit a run, interrupt/cancel it, verify Resume button works and pipeline continues from checkpoint.
 - Tune recovery scan `max_hours` window based on operational experience.
 - Add Prometheus/Grafana dashboards for agent runtime metrics.
