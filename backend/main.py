@@ -75,12 +75,13 @@ async def lifespan(app: FastAPI):
     await vector_service.ensure_collection()
 
     # ── LangGraph Checkpointer initialization ──
-    from psycopg_pool import ConnectionPool
+    from psycopg_pool import AsyncConnectionPool
     from langgraph.checkpoint.postgres.shallow import AsyncShallowPostgresSaver
 
-    db_url = settings.database_url
-    checkpoint_pool = ConnectionPool(
-        conninfo=db_url,
+    raw_db_url = str(settings.database_url).replace("postgresql+asyncpg://", "postgresql://")
+
+    checkpoint_pool = AsyncConnectionPool(
+        conninfo=raw_db_url,
         min_size=1,
         max_size=2,
         open=True,
@@ -114,13 +115,11 @@ async def lifespan(app: FastAPI):
     try:
         from .services.agent_runtime_service import AgentRuntimeService
         runtime_svc = AgentRuntimeService(
-            session_factory=lambda: session_factory(),
-        )
-        await runtime_svc._recover_stale_runs(
+            session_or_factory=session_factory,
             checkpointer=checkpointer,
-            max_hours=24,
         )
-        logger.info("Agent run recovery scan complete")
+        result = await runtime_svc._recover_stale_runs(max_hours=24)
+        logger.info("Agent run recovery scan complete: %s", result)
     except Exception:
         logger.warning("Recovery scan failed (non-fatal)", exc_info=True)
 

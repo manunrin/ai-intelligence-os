@@ -178,9 +178,11 @@ def get_runtime_service(
     """Dependency: create runtime service bound to request session with factory for bg tasks."""
     from ..services.agent_runtime_service import AgentRuntimeService
     sf = None
+    cp = None
     if request is not None:
         sf = getattr(request.app.state, 'session_factory', None)
-    return AgentRuntimeService(db, session_factory=sf)
+        cp = getattr(request.app.state, 'checkpointer', None)
+    return AgentRuntimeService(db, session_factory=sf, checkpointer=cp)
 
 
 def get_runtime_service_with_event_pub(

@@ -86,6 +86,7 @@ class AgentRuntimeService:
         session_or_factory: AsyncSession | Callable[[], AsyncSession],
         *,
         session_factory: Callable[[], AsyncSession] | None = None,
+        checkpointer: Any = None,
     ) -> None:
         if isinstance(session_or_factory, async_sessionmaker):
             # sessionmaker — use it for both request and bg tasks
@@ -110,6 +111,7 @@ class AgentRuntimeService:
         self._executor: Executor = SyncExecutor()
         self._cancellation_tokens: dict[uuid.UUID, bool] = {}
         self._run_tasks: dict[uuid.UUID, asyncio.Task | None] = {}
+        self._checkpointer: Any = checkpointer
 
     async def list_agent_runs(self, user_id: uuid.UUID, *, offset: int = 0, limit: int = 20) -> list[dict[str, Any]]:
         """Return paginated agent runs for the given user."""
@@ -212,6 +214,7 @@ class AgentRuntimeService:
                 state=input_payload,
                 timeout_seconds=timeout_seconds,
                 thread_id=f"agent-run-{run_id}",
+                checkpointer=self._checkpointer,
             )
         )
         self._run_tasks[run_id] = bg_task
@@ -225,6 +228,7 @@ class AgentRuntimeService:
         state: dict[str, Any],
         timeout_seconds: int,
         thread_id: str | None = None,
+        checkpointer: Any = None,
     ) -> None:
         """Execute a run in the background with its own DB session."""
         from ..trace import start_span
@@ -246,7 +250,7 @@ class AgentRuntimeService:
                 graph_builder = PIPELINE_REGISTRY[pipeline_type]
 
                 def factory():
-                    return graph_builder()
+                    return graph_builder(checkpointer=checkpointer)
 
                 result = await asyncio.wait_for(
                     self._executor.execute(
@@ -509,7 +513,8 @@ class AgentRuntimeService:
         with a recovery error note.
 
         Args:
-            checkpointer: AsyncShallowPostgresSaver instance from app.state.
+            checkpointer: Optional AsyncShallowPostgresSaver instance.
+                Falls back to self._checkpointer if not provided.
             max_hours: Only consider runs started more than this many hours ago.
 
         Returns:
@@ -518,7 +523,10 @@ class AgentRuntimeService:
         from sqlalchemy import select
         from ..database.models import AgentRun
 
-        if not checkpointer:
+        # Use provided checkpointer or fall back to stored one
+        cp = checkpointer if checkpointer is not None else self._checkpointer
+
+        if not cp:
             logger.warning("No checkpointer provided; skipping recovery scan")
             return {"checked": 0, "recovered": 0, "marked_failed": 0}
 
@@ -559,7 +567,7 @@ class AgentRuntimeService:
             # Check if checkpoint exists for this thread_id
             config = {"configurable": {"thread_id": thread_id}}
             try:
-                checkpoint_tuple = await checkpointer.aget_tuple(config)
+                checkpoint_tuple = await cp.aget_tuple(config)
             except Exception as exc:
                 logger.error(
                     "Checkpoint lookup failed for thread_id=%s: %s",
