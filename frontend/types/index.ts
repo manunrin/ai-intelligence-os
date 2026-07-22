@@ -31,6 +31,9 @@ export interface KnowledgeSearchResult {
   kind: string;
   score: number | null;
   tags: string[];
+  hybrid_score?: number | null;
+  dense_score?: number | null;
+  keyword_score?: number | null;
 }
 
 export interface RAGResponse {

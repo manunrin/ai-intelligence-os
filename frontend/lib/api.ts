@@ -75,10 +75,11 @@ export const api = {
     return request<T>(path);
   },
 
-  post<T, B = unknown>(path: string, body: B): Promise<T> {
+  post<T, B = unknown>(path: string, body: B, options?: { signal?: AbortSignal }): Promise<T> {
     return request<T>(path, {
       method: "POST",
       body: JSON.stringify(body),
+      ...options,
     });
   },
 

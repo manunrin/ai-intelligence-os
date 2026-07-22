@@ -11,6 +11,25 @@ export const knowledgeKeys = {
   lists: () => [...knowledgeKeys.all, "list"] as const,
 };
 
+interface SearchParams {
+  query: string;
+  limit?: number;
+  kind_filter?: string | null;
+  tag_filter?: string | null;
+  score_threshold?: number | null;
+}
+
+export function parseSearchResponse(raw: unknown): KnowledgeSearchResult[] {
+  if (typeof raw === "object" && raw !== null && "data" in raw) {
+    const obj = raw as Record<string, unknown>;
+    if ("data" in obj && typeof obj.data === "object") {
+      const inner = obj.data as Record<string, unknown>;
+      return (inner.results ?? []) as KnowledgeSearchResult[];
+    }
+  }
+  return [];
+}
+
 export function useKnowledgeItems() {
   return useQuery({
     queryKey: knowledgeKeys.lists(),
@@ -41,33 +60,43 @@ export function useUpdateKnowledge() {
   });
 }
 
-export function useKnowledgeSearch() {
+export function useKnowledgeSearch(params: SearchParams) {
   return useQuery({
-    queryKey: ["knowledge", "search"],
-    queryFn: async () => [],
-    enabled: false,
+    queryKey: [
+      "knowledge",
+      "search",
+      params.query,
+      params.limit,
+      params.kind_filter,
+      params.tag_filter,
+      params.score_threshold,
+    ],
+    queryFn: async ({ signal }: { signal?: AbortSignal }) => {
+      const raw = await api.post<unknown>(
+        "/api/v1/knowledge/search",
+        {
+          query: params.query,
+          limit: params.limit ?? 5,
+          ...(params.kind_filter ? { kind_filter: params.kind_filter } : {}),
+          ...(params.tag_filter ? { tag_filter: params.tag_filter } : {}),
+          ...(params.score_threshold !== undefined
+            ? { score_threshold: params.score_threshold }
+            : {}),
+        },
+        { signal }
+      );
+      return parseSearchResponse(raw);
+    },
+    enabled: !!params.query.trim(),
   });
 }
 
 export function useKnowledgeSearchMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (params: {
-      query: string;
-      limit?: number;
-      kind_filter?: string | null;
-      tag_filter?: string | null;
-      score_threshold?: number | null;
-    }) => {
+    mutationFn: async (params: SearchParams) => {
       const raw = await api.post<unknown>("/api/v1/knowledge/search", params);
-      if (typeof raw === "object" && raw !== null && "data" in raw) {
-        const obj = raw as Record<string, unknown>;
-        if ("data" in obj && typeof obj.data === "object") {
-          const inner = obj.data as Record<string, unknown>;
-          return (inner.results ?? []) as KnowledgeSearchResult[];
-        }
-      }
-      return [];
+      return parseSearchResponse(raw);
     },
     onSuccess: (results) => {
       qc.setQueryData(["knowledge", "searchResults"], results);
@@ -204,7 +233,12 @@ async function parseSSE(
         if (!payload) continue;
 
         try {
-          const event = JSON.parse(payload) as { type: string; content?: string; sources?: Array<{ knowledge_id: string; title: string }>; message?: string };
+          const event = JSON.parse(payload) as {
+            type: string;
+            content?: string;
+            sources?: Array<{ knowledge_id: string; title: string }>;
+            message?: string;
+          };
           if (event.type === "token" && event.content !== undefined) {
             cbs.onToken(event.content);
           } else if (event.type === "done") {
