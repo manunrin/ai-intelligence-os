@@ -68,3 +68,20 @@ export function useRefreshAgentRuns() {
     },
   });
 }
+
+export function useResumeAgentRun() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (runId: string) =>
+      unwrapSingle<AgentRun>(
+        api.post<unknown, Record<string, never>>(
+          `/api/v1/agents/runs/${runId}/resume`,
+          {},
+        ),
+      ),
+    onSuccess: (_data, runId) => {
+      qc.invalidateQueries({ queryKey: agentRunKeys.lists() });
+      qc.invalidateQueries({ queryKey: agentRunKeys.details(runId) });
+    },
+  });
+}

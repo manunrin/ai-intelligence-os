@@ -483,6 +483,107 @@ class AgentRuntimeService:
 
         yield AgentEvent(type=EventType.HEARTBEAT, run_id=run_uuid).to_sse()
 
+    async def resume(
+        self,
+        run_id: str,
+        user_id: uuid.UUID,
+    ) -> dict[str, Any]:
+        """Resume an interrupted agent run from its LangGraph checkpoint.
+
+        Validates that the run is in 'interrupted' status, loads the
+        persisted checkpoint state via checkpointer.aget(), updates the
+        run record back to 'running', and dispatches execution using the
+        same thread_id so LangGraph continues from the saved state.
+
+        Args:
+            run_id: UUID string of the interrupted run to resume.
+            user_id: Authenticated user requesting the resume.
+
+        Returns:
+            Updated run dict with status 'running'.
+
+        Raises:
+            AgentRunNotFoundError: If run_id does not exist.
+            ValueError: If run is not in 'interrupted' status.
+        """
+        run_uuid = uuid.UUID(run_id)
+        repo, _ = _make_repo(self._request_session)
+
+        run = await repo.get_by_id(run_uuid)
+        if run is None:
+            raise AgentRunNotFoundError(run_id)
+        if run.status != "interrupted":
+            raise ValueError(
+                f"Cannot resume run with status '{run.status}'. "
+                "Only 'interrupted' runs can be resumed."
+            )
+
+        # Update run record back to running state
+        now = _utcnow()
+        await repo.update(
+            run_uuid,
+            status="running",
+            stage="resuming",
+            started_at=now,
+            finished_at=None,
+            duration_ms=None,
+        )
+        await self._request_session.commit()
+
+        # Load checkpoint state to pass as initial state
+        thread_id = f"agent-run-{run_uuid}"
+        config = {"configurable": {"thread_id": thread_id}}
+        cp = self._checkpointer
+        resume_state: dict[str, Any] | None = None
+
+        if cp is not None:
+            try:
+                checkpoint_tuple = await cp.aget(config)
+                if checkpoint_tuple is not None:
+                    # Extract channel values from checkpoint state
+                    checkpoint_data = checkpoint_tuple.checkpoint or {}
+                    channel_values = checkpoint_data.get("channel_values", {})
+                    if channel_values:
+                        resume_state = dict(channel_values)
+                        logger.info(
+                            "Loaded checkpoint state for run %s (thread_id=%s)",
+                            str(run_uuid),
+                            thread_id,
+                        )
+            except Exception:
+                logger.warning(
+                    "Failed to load checkpoint for run %s; using original input_payload",
+                    str(run_uuid),
+                    exc_info=True,
+                )
+
+        # Fall back to original input_payload if no checkpoint state loaded
+        if resume_state is None:
+            resume_state = dict(run.input_payload or {})
+
+        # Resolve pipeline type from input payload
+        pipeline_type = (resume_state.get("_agent_type")
+                         or (run.input_payload or {}).get("_agent_type")
+                         or "intelligence")
+        if pipeline_type not in PIPELINE_REGISTRY:
+            pipeline_type = "intelligence"
+
+        # Dispatch execution — same thread_id, checkpoint-aware
+        bg_task = asyncio.create_task(
+            self._execute_run(
+                run_id=run_uuid,
+                pipeline_type=pipeline_type,
+                state=resume_state,
+                timeout_seconds=300,
+                thread_id=thread_id,
+                checkpointer=self._checkpointer,
+            )
+        )
+        self._run_tasks[run_uuid] = bg_task
+
+        logger.info("Resumed run %s (thread_id=%s, pipeline=%s)", str(run_uuid), thread_id, pipeline_type)
+        return _run_to_dict(run)
+
     @property
     def available_pipelines(self) -> list[dict[str, Any]]:
         return [

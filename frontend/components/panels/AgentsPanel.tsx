@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAgentRuns, useSubmitAgentRun, useCancelAgentRun, useRefreshAgentRuns } from "@/hooks/useAgentRuns";
+import { useAgentRuns, useSubmitAgentRun, useCancelAgentRun, useResumeAgentRun, useRefreshAgentRuns } from "@/hooks/useAgentRuns";
 import { useAgentStream } from "@/hooks/useAgentStream";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -65,6 +65,7 @@ export function AgentsPanel({ runs, isLoading }: AgentsPanelProps) {
 
   const submitMutation = useSubmitAgentRun();
   const cancelMutation = useCancelAgentRun();
+  const resumeMutation = useResumeAgentRun();
   const refreshMutation = useRefreshAgentRuns();
 
   // Track active streaming run
@@ -122,6 +123,14 @@ export function AgentsPanel({ runs, isLoading }: AgentsPanelProps) {
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to retry run");
+    }
+  };
+
+  const handleResume = async (runId: string) => {
+    try {
+      await resumeMutation.mutateAsync(runId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to resume run");
     }
   };
 
@@ -232,6 +241,17 @@ export function AgentsPanel({ runs, isLoading }: AgentsPanelProps) {
                       disabled={submitMutation.isPending}
                     >
                       Re-run
+                    </Button>
+                  )}
+                  {r.status === "interrupted" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300"
+                      onClick={() => handleResume(r.id)}
+                      disabled={resumeMutation.isPending}
+                    >
+                      Resume
                     </Button>
                   )}
                 </div>

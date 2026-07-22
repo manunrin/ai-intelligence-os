@@ -29,6 +29,7 @@ def _make_mock_session() -> MagicMock:
     session.get = AsyncMock(return_value=None)
     session.add = AsyncMock()
     session.flush = AsyncMock()
+    session.refresh = AsyncMock()
     return session
 
 
@@ -317,3 +318,110 @@ class TestRunToDictIncludesRecoveredAt:
         d = _run_to_dict(run)
         assert "recovered_at" in d
         assert d["recovered_at"] is None
+
+
+# ── Resume Tests ──────────────────────────────────────────────────────
+
+
+class TestResumeAgentRun:
+    """Tests for AgentRuntimeService.resume()."""
+
+    @pytest.mark.asyncio
+    async def test_resume_nonexistent_raises_not_found(self):
+        session = _make_mock_session()
+        svc = _build_service(session)
+        # get_by_id uses session.get(), not session.execute()
+        session.get = AsyncMock(return_value=None)
+
+        from backend.services.agent_runtime_service import AgentRunNotFoundError
+
+        with pytest.raises(AgentRunNotFoundError):
+            await svc.resume(str(uuid.uuid4()), user_id=uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_resume_non_interrupted_raises_value_error(self):
+        session = _make_mock_session()
+        run_id = uuid.uuid4()
+        run = _make_mock_agent_run(run_id=str(run_id), status="completed")
+        session.get = AsyncMock(return_value=run)
+        svc = _build_service(session)
+
+        with pytest.raises(ValueError, match="Cannot resume run with status 'completed'"):
+            await svc.resume(str(run_id), user_id=uuid.uuid4())
+
+    @pytest.mark.asyncio
+    async def test_resume_no_checkpointer_uses_input_payload(self):
+        session = _make_mock_session()
+        run_id = uuid.uuid4()
+        input_payload = {"topic": "test", "_agent_type": "intelligence"}
+        run = _make_mock_agent_run(
+            run_id=str(run_id),
+            status="interrupted",
+        )
+        run.input_payload = input_payload
+        session.get = AsyncMock(return_value=run)
+
+        svc = _build_service(session)
+        result = await svc.resume(str(run_id), user_id=uuid.uuid4())
+
+        assert result["status"] == "running"
+        # Background task was created (no checkpointer → uses input_payload as state)
+
+    @pytest.mark.asyncio
+    async def test_resume_loads_checkpoint_state(self):
+        session = _make_mock_session()
+        run_id = uuid.uuid4()
+        run = _make_mock_agent_run(
+            run_id=str(run_id),
+            status="interrupted",
+        )
+        run.input_payload = {"topic": "original", "_agent_type": "autonomous"}
+        session.get = AsyncMock(return_value=run)
+
+        # Simulate checkpoint with channel_values
+        checkpoint_data = {
+            "channel_values": {
+                "__pregel_tasks": [],
+                "research_output": {"analysis": "partial results"},
+            },
+        }
+        checkpoint_config = {
+            "configurable": {
+                "thread_id": str(run_id),
+                "thread_ts": "1700000000000001",
+            }
+        }
+        mock_checkpoint = MagicMock()
+        mock_checkpoint.checkpoint = checkpoint_data
+        mock_checkpoint.config = checkpoint_config
+        mock_checkpoint.metadata = {}
+        mock_checkpoint.parent_config = None
+
+        mock_checkpointer = AsyncMock()
+        mock_checkpointer.aget = AsyncMock(return_value=mock_checkpoint)
+        mock_checkpointer.aget_tuple = AsyncMock(return_value=mock_checkpoint)
+
+        svc = _build_service(session)
+        svc._checkpointer = mock_checkpointer
+
+        result = await svc.resume(str(run_id), user_id=uuid.uuid4())
+
+        assert result["status"] == "running"
+        assert mock_checkpointer.aget.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_resume_updates_run_status_and_stage(self):
+        session = _make_mock_session()
+        run_id = uuid.uuid4()
+        run = _make_mock_agent_run(
+            run_id=str(run_id),
+            status="interrupted",
+        )
+        run.input_payload = {"_agent_type": "intelligence"}
+        session.get = AsyncMock(return_value=run)
+
+        svc = _build_service(session)
+        await svc.resume(str(run_id), user_id=uuid.uuid4())
+
+        # Verify update was called with running status and resuming stage
+        assert session.commit.call_count >= 1

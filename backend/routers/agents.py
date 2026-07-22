@@ -6,7 +6,7 @@ import logging
 import uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import StreamingResponse
 
 from ..schemas.agent_run import (
@@ -186,6 +186,23 @@ async def cancel_agent_run(
     service: AgentRuntimeService = Depends(get_runtime_service_with_event_pub),
 ):
     result = await service.cancel_run(run_id, user_id=current_user.id)
+    return APIResponse(success=True, data=result, error=None)
+
+
+@router.post(
+    "/runs/{run_id}/resume",
+    summary="Resume agent run",
+    description="Resume an interrupted agent run from its LangGraph checkpoint. The run must be in 'interrupted' status.",
+    operation_id="resumeAgentRun",
+    response_model=APIResponse[AgentRunResponse],
+)
+@limiter.limit("20/hour")
+async def resume_agent_run(
+    run_id: str,
+    current_user: Any = Depends(get_current_user),
+    service: AgentRuntimeService = Depends(get_runtime_service_with_event_pub),
+):
+    result = await service.resume(run_id, user_id=current_user.id)
     return APIResponse(success=True, data=result, error=None)
 
 
