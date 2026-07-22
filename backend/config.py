@@ -56,8 +56,8 @@ class Settings(BaseSettings):
     # -- Rate Limiting --
     rate_limit_requests: int = 100
     rate_limit_window_seconds: int = 3600
-    rate_limit_login_requests: int = 5
-    rate_limit_login_window_seconds: int = 900
+    rate_limit_login_requests: int = 100
+    rate_limit_login_window_seconds: int = 60
 
     # -- CORS --
     cors_allowed_origins: str = ""

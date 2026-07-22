@@ -198,6 +198,7 @@ async def cancel_agent_run(
 )
 @limiter.limit("20/hour")
 async def resume_agent_run(
+    request: Request,
     run_id: str,
     current_user: Any = Depends(get_current_user),
     service: AgentRuntimeService = Depends(get_runtime_service_with_event_pub),

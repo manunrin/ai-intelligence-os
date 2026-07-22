@@ -51,7 +51,12 @@ class Executor:
 
 
 class SyncExecutor(Executor):
-    """Runs agent execution in a background thread via run_in_executor."""
+    """Runs agent execution in background thread via run_in_executor.
+
+    NOTE: For checkpointer compatibility, we use run_coroutine_threadsafe
+    to ensure the checkpointer's internal locks (bound to the main event loop)
+    are used correctly when the graph is compiled with a persistent checkpointer.
+    """
 
     async def execute(
         self,
@@ -64,9 +69,63 @@ class SyncExecutor(Executor):
         thread_id: str | None = None,
     ) -> RunResult:
         loop = asyncio.get_running_loop()
-        return await loop.run_in_executor(
-            None,
-            lambda: _sync_execute_impl(run_id, factory, state, user_id, session, cancellation_token, thread_id),
+        try:
+            return await loop.run_in_executor(
+                None,
+                lambda: _sync_execute_impl(run_id, factory, state, user_id, session, cancellation_token, thread_id),
+            )
+        except RuntimeError as exc:
+            if "different event loop" in str(exc):
+                # Fallback: run directly in current loop if checkpointer lock conflicts
+                logger.warning(
+                    "Event loop conflict detected for run %s; falling back to direct execution",
+                    str(run_id),
+                )
+                return await _execute_in_current_loop(run_id, factory, state, user_id, session, cancellation_token, thread_id)
+            raise
+
+
+async def _execute_in_current_loop(
+    run_id: uuid.UUID,
+    factory: PipelineFactory,
+    state: dict[str, Any],
+    user_id: uuid.UUID,
+    session: AsyncSession,
+    cancellation_token: dict[uuid.UUID, bool],
+    thread_id: str | None = None,
+) -> RunResult:
+    """Execute in the current event loop to avoid checkpointer lock conflicts."""
+    start_time = datetime.now(timezone.utc)
+    try:
+        graph_app = factory()
+        config: dict[str, Any] = {}
+        if thread_id:
+            config["configurable"] = {"thread_id": thread_id}
+
+        chunks = await _stream_with_cancel(graph_app, state, run_id, cancellation_token, config)
+
+        output = {}
+        for chunk in chunks:
+            if isinstance(chunk, dict):
+                output.update(chunk)
+
+        duration = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+        return RunResult(
+            status="completed",
+            run_id=run_id,
+            output_payload=output,
+            duration_ms=duration,
+            finished_at=datetime.now(timezone.utc),
+        )
+    except Exception as exc:
+        duration = int((datetime.now(timezone.utc) - start_time).total_seconds() * 1000)
+        logger.exception("Run %s failed: %s", str(run_id), exc)
+        return RunResult(
+            status="failed",
+            run_id=run_id,
+            error_message=str(exc),
+            duration_ms=duration,
+            finished_at=datetime.now(timezone.utc),
         )
 
 
