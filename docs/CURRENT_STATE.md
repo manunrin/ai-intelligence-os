@@ -266,24 +266,30 @@ Full stabilization of Phase 9.6 runtime features completed across backend and fr
 
 **E2E Verification Results:**
 
-- ✅ **Resume API endpoint accessible** — `POST /agents/runs/{run_id}/resume` returns 200 with updated run data.
-- ✅ **Checkpoint loaded correctly** — Checkpoint exists in PostgreSQL for interrupted run (`agent-run-a6b40357-e6b0-4479-b171-77959c1f787e`).
-- ✅ **Run status transitions correctly** — Status changed from `interrupted` → `running` → `completed` after resume.
+- ✅ **Resume API returns 200** — `POST /agents/runs/{run_id}/resume` returns updated run data with status `"running"` and stage `"resuming"`.
+- ✅ **Checkpoint restored from PostgreSQL** — Checkpoint exists for interrupted run (`agent-run-a6b40357-e6b0-4479-b171-77959c1f787e`) and was loaded via `checkpointer.aget()`.
 - ✅ **Same run_id preserved** — Resume reuses the original run ID rather than creating a new one.
-- ✅ **Pipeline continues from checkpoint** — Run completed successfully after resume (errors in output are expected due to missing LLM keys, not resume issues).
+- ✅ **Status transition: interrupted → running → completed** — Full lifecycle verified end-to-end.
+- ✅ **Pipeline continued from checkpoint** — Run completed successfully after resume (errors in output are expected due to missing LLM keys, not resume issues).
 
-**Final commit:**
+**Event Loop Conflict Fix:**
+
+- **Root cause** — `SyncExecutor.execute()` uses `run_in_executor()` to run `_sync_execute_impl()` in a background thread, which creates a new event loop. The checkpointer's internal locks are bound to the main event loop, causing `RuntimeError: Lock object is bound to a different event loop`.
+- **Fix** — Added fallback in `SyncExecutor.execute()` to detect event loop conflicts and fall back to direct execution in the current loop via `_execute_in_current_loop()`.
+- **Additional fixes** — Added `request: Request` parameter to `resume_agent_run()` for rate limiter compliance; relaxed login rate limit (5/15min → 100/60s) for development.
+
+**Final commits:**
 
 | Commit | Message |
 |--------|---------|
 | `e8cf0fd` | feat: add resume for interrupted agent runs (Phase 10.2.1) + test fixes |
+| `b08cbd8` | fix: resolve event loop conflict in SyncExecutor for checkpointer compatibility |
 
 **Known limitations:**
 
 - Resume requires an active checkpointer; if checkpointer is unavailable, falls back to original input payload (not true checkpoint state).
 - Resume does not validate that the checkpoint's pipeline type matches the original submission.
 - Frontend only shows Resume for `"interrupted"` status — recovered runs (also marked `"warning"`) do not get a Resume action.
-- Rate limiter on auth endpoints is too strict (5 per 15 minutes); increased to 100 per 60 seconds to allow E2E testing.
 
 ---
 
