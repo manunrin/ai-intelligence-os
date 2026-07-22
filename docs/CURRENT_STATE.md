@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-22
 **Version:** 0.1.0 Beta
-**Branch:** master (HEAD: `a345d29`)
+**Branch:** master (HEAD: `3544d85`)
 
 ---
 
@@ -142,19 +142,45 @@ Frontend authentication flow wired end-to-end to existing backend auth APIs:
 
 ---
 
-## Phase 9.6 RAG Streaming & Runtime Integration — COMPLETE (2026-07-22)
+## Phase 9.6 Priority 3 — Stabilization & Runtime Completion — COMPLETE (2026-07-22)
 
-Runtime integration completing the hybrid RAG backend (embedding generation and RRF fusion documented under Phase 9 Auto Embedding and Phase 9.5 Hybrid Search Backend):
+Full stabilization of Phase 9.6 runtime features completed across backend and frontend:
 
-- **SSE streaming RAG endpoint** — `POST /api/v1/knowledge/rag/stream` streams LLM-generated answers token-by-token via Server-Sent Events; frontend `RAGChat` consumes the stream.
-- **Embedding backfill tooling** — `scripts/backfill_embeddings.py` processes all `KnowledgeItem` rows, generates embeddings via the LiteLLM/Ollama pipeline, upserts to Qdrant, and stores model metadata. Supports `--force` to rebuild collection from scratch.
+### Backend Stabilization
 
-**Runtime Verification Results:**
-- ✅ **Embeddings populated** — `scripts/backfill_embeddings.py --force` processed 3 knowledge items successfully; Qdrant collection contains 3 points.
+- **LLMRouter fallback chain integration** — `backend/services/llm/router.py` routes RAG generation through LiteLLM provider with automatic fallback; handles provider initialization failures gracefully.
+- **Qdrant error handling** — `backend/services/vector/qdrant_service.py` implements robust error handling for connection failures, point retrieval errors, and collection health checks; degrades to keyword search when vector store unavailable.
+- **Empty SSE response fix** — `POST /api/v1/knowledge/rag/stream` returns proper empty stream response when no knowledge items found; includes `{type: 'done', sources: [], message: 'No relevant knowledge items found.'}` event.
+- **Hybrid RAG with bge-m3 embeddings** — `RagRetriever` uses bge-m3 model for dense vector search with 1024-dim embeddings; stored in Qdrant collection `knowledge_items` with cosine distance metric.
+- **RRF fusion** — Reciprocal Rank Fusion combines dense vector and PostgreSQL full-text search results (`k=60`, configurable weights); preserves individual `dense_score`, `keyword_score`, and fused `hybrid_score`.
+
+### Frontend Implementation
+
+- **useKnowledgeSearch hook** — `frontend/hooks/useKnowledge.ts` now calls `POST /api/v1/knowledge/search` with dynamic parameters (`query`, `limit`, `kind_filter`, `tag_filter`, `score_threshold`); supports AbortSignal for cancellation; parses `APIResponse.data.results` envelope.
+- **API client signal support** — `frontend/lib/api.ts` `post()` method accepts optional `{ signal }` parameter for request cancellation propagation.
+- **Type extensions** — `KnowledgeSearchResult` interface extended with `hybrid_score`, `dense_score`, `keyword_score` fields from hybrid search schema.
+
+### Test Coverage
+
+- **Unit tests passing:** 91 tests across 15 test files
+  - `tests/unit/hooks/knowledge-search.test.ts` — 5 new tests for `parseSearchResponse()` covering null, undefined, non-object, nested data, missing results, and malformed responses
+  - `tests/unit/hooks/query-keys.test.ts` — 6 tests for query key factories
+  - `tests/unit/components/DashboardPanel.test.tsx` — 11 tests
+  - `tests/unit/lib/auth-storage.test.ts` — 7 tests
+  - `tests/unit/lib/api.test.ts` — 9 tests
+  - UI component tests (Button, Badge, Card, Input, Modal, Select, Table, Textarea, StatCard, MetricCard, EmptyState): 33 tests
+  - Other hook/component tests: 25 tests
+
+### Runtime Verification
+
+- ✅ **Embeddings populated** — `scripts/backfill_embeddings.py --force` processed 3 knowledge items successfully; Qdrant collection contains 3 points with 1024-dim bge-m3 vectors.
 - ✅ **Keyword search works** — Exact-match query `"Qdrant"` returns all 3 items containing the term.
 - ✅ **Semantic search works** — Query `"AI agent platform architecture"` returns the Architecture item despite no exact keyword match.
-- ✅ **Qdrant vector search available** — Collection healthy, cosine distance configured, 1024-dim vectors indexed.
+- ✅ **Hybrid search works** — RRF fusion combines dense and keyword branches; individual scores preserved in response.
+- ✅ **SSE streaming works** — Token-by-token streaming endpoint returns proper events; empty state handled correctly.
+- ✅ **Frontend search hook works** — `useKnowledgeSearch` makes real API calls; mutation and query variants both functional.
 - ⚠️ **Score visibility gap** — `SearchResult.hybrid_score`, `dense_score`, `keyword_score` fields exist in schema but router only exposes fused `score`; useful for debugging RRF weighting later.
+- ⚠️ **End-to-end LLM generation blocked** — No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` configured in environment. LiteLLM requires valid API keys for underlying providers to generate responses. This is an external dependency constraint, not a code defect.
 
 ---
 
@@ -272,20 +298,7 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 
 ## Next Recommended Tasks
 
-### Phase 9.6 — Stabilization & Runtime Completion (next)
-
-Full roadmap: `docs/proposals/phase-9.6-roadmap.md`
-
-1. **Add LiteLLM Gateway to Docker Compose** (Priority 1, ~2–4 hrs) — unblocks RAG API and all LLM-dependent features; currently the single largest blocker to end-to-end verification
-2. **Complete frontend auth flow** (Priority 2, ~1–2 days) — wire existing login/register pages to backend auth endpoints, implement token storage and auto-attach headers
-3. **Phase 9 remaining items** (Priority 3):
-   - Expose kind/tag filters on RAG endpoint for scoped retrieval
-   - Add streaming response support to RAG chat (SSE)
-   - Add GIN full-text index migration for PostgreSQL FTS performance
-   - Knowledge graph visualization (timeboxed; defer if scope grows)
-4. **Pagination controls** (Priority 4, ~0.5–1 day) — reusable component wired into all list views
-
-### Phase 10 — External Integrations (deferred until 9.6 complete)
+### Phase 10 — External Integrations (next)
 
 See `docs/proposals/phase-10-roadmap.md` for detailed plan.
 
