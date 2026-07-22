@@ -320,6 +320,40 @@ Full stabilization of Phase 9.6 runtime features completed across backend and fr
 
 ---
 
+## Phase 10.2.2-B — Notification Channels (COMPLETE — 2026-07-23)
+
+Full notification delivery implementation replacing log-only stubs:
+
+**Channel implementations:**
+- **Email** (`backend/services/notification/channels/email.py`) — Uses `aiosmtplib` for SMTP delivery with TLS support, multipart plain+HTML messages. Recipients from `SMTP_TO` env var (comma-separated), falls back to `SMTP_FROM` when empty.
+- **Telegram** (`backend/services/notification/channels/telegram.py`) — Uses `httpx` POST to Bot API `sendMessage`. Supports multiple chat IDs via `TELEGRAM_CHAT_IDS` (comma-separated). Truncates messages to 4096 chars with `[truncated]` notice. Per-chat error collection.
+- **Slack** (`backend/services/notification/channels/slack.py`) — Uses `httpx` POST to incoming webhook URL. Simple text payload delivery.
+
+**Architecture:**
+- `ChannelBase` ABC + `DeliveryResult` dataclass define the channel contract
+- `channel_registry.py` instantiates enabled channels from settings and dispatches to each requested channel
+- Graceful degradation — per-channel failures logged as warnings, recorded in `delivery_status`, never crash the pipeline
+- WeChat remains log-only stub (region-locked, low priority)
+
+**Schema changes:**
+- `NotificationOutput.delivery_status: dict[str, str]` — per-channel result map (`{"email": "sent", "telegram": "failed: ..."}`)
+
+**Configuration:**
+- New env vars: `SMTP_TO`, `TELEGRAM_CHAT_IDS` (plus existing `SMTP_*`, `TELEGRAM_BOT_TOKEN`, `SLACK_WEBHOOK_URL`)
+- Channel is considered "enabled" only if all required config fields are non-empty
+
+**Test coverage:**
+- 29 notification-specific tests across 5 test files
+- Full suite: 520 unit tests pass, 39 integration tests pass
+
+**Final commit:**
+
+| Commit | Message |
+|--------|---------|
+| `8c4d440` | feat: implement notification channels |
+
+---
+
 ## Completed Milestones
 
 ### Infrastructure & Foundation (Phases 1–2)
@@ -389,7 +423,7 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 7. **No error boundaries** — Individual sections don't recover independently.
 8. **LiteLLM Gateway not deployed** — Configured in docker-compose.yml but litellm service not included.
 9. **Embedding providers not connected** — Provider classes exist but actual HTTP calls need testing.
-10. **Notification channels are stubs** — Email, Telegram, WeChat log only, no real delivery.
+10. **Notification channels implemented** — SMTP (aiosmtplib), Telegram (Bot API), and Slack (incoming webhook) fully implemented in `backend/services/notification/channels/`. Channels enabled/disabled via env vars (`SMTP_*`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_IDS`, `SLACK_WEBHOOK_URL`). Per-channel delivery status recorded in `NotificationOutput.delivery_status`. Graceful degradation — one channel failure doesn't block others. WeChat remains log-only stub. Email falls back to `SMTP_FROM` when `SMTP_TO` is empty. Telegram requires explicit `TELEGRAM_CHAT_IDS` (comma-separated).
 11. **Test type errors** — Pre-existing TS errors in test files (missing `@testing-library/jest-dom` types).
 12. **No standalone articles page** — Articles only visible as a tab in the main dashboard; `frontend/app/articles/` directory is empty.
 13. **No standalone tasks page** — Tasks only visible as a tab in the main dashboard; `frontend/app/tasks/` directory is empty.
@@ -408,6 +442,6 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 - Tune recovery scan `max_hours` window based on operational experience.
 - Add Prometheus/Grafana dashboards for agent runtime metrics.
 - Implement resume validation to ensure checkpoint pipeline type matches original submission.
-- Consider Phase 10.2.2-B: Notification Channels (SMTP, Telegram, Slack).
+- **Phase 10.2.2-B: Notification Channels** — COMPLETE. SMTP (aiosmtplib), Telegram (Bot API), and Slack (incoming webhook) channels. Config-driven enable/disable via env vars. Per-channel delivery status tracking. Graceful degradation — one channel failure doesn't block others.
 - Consider Phase 10.2.2-C: Scheduler API + Persistence.
 - Consider Phase 10.2.2-D: Refresh Tokens.
