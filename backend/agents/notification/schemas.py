@@ -23,6 +23,10 @@ class NotificationOutput(BaseModel):
 
     markdown: str = Field(description="Markdown-formatted notification content")
     channels: list[str] = Field(description="Target channels")
+    delivery_status: dict[str, str] = Field(
+        default_factory=dict,
+        description="Per-channel delivery result: {\"email\": \"sent\", \"telegram\": \"failed: 400\"}",
+    )
 
     @classmethod
     def from_llm_response(cls, raw: str, channels: list[str]) -> "NotificationOutput":

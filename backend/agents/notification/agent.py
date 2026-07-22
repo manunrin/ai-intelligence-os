@@ -75,33 +75,13 @@ class NotificationAgent(AgentBase):
     ) -> None:
         """Dispatch notifications via configured channels.
 
-        Each channel logs the notification content. Real channel implementations
-        (email, SMS, push) can be added as MCP tools or direct integrations.
+        Each enabled channel (email, telegram, slack) is invoked independently.
+        Failures are logged as warnings and recorded in delivery_status.
         """
-        for channel in input_data.channels:
-            try:
-                if channel == "email":
-                    await self._send_email(output.markdown)
-                elif channel == "telegram":
-                    await self._send_telegram(output.markdown)
-                elif channel == "wechat":
-                    await self._send_wechat(output.markdown)
-                else:
-                    logger.debug("Unknown channel '%s', logging only", channel)
-            except Exception as exc:
-                logger.warning("Notification dispatch to '%s' failed: %s", channel, exc)
+        from ...services.notification.channel_registry import send_notifications
 
-    async def _send_email(self, content: str) -> None:
-        """Send notification via email (stub — integrate with SMTP or SES)."""
-        logger.info("[email] %s", content[:200])
-
-    async def _send_telegram(self, content: str) -> None:
-        """Send notification via Telegram (stub — integrate with Bot API)."""
-        logger.info("[telegram] %s", content[:200])
-
-    async def _send_wechat(self, content: str) -> None:
-        """Send notification via WeChat (stub — integrate with WeChat Work API)."""
-        logger.info("[wechat] %s", content[:200])
+        status = await send_notifications(output.markdown, output.channels)
+        output.delivery_status = status
 
     @staticmethod
     def _build_prompt(data: NotificationInput) -> str:

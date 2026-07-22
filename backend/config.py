@@ -64,6 +64,20 @@ class Settings(BaseSettings):
     executor_retry_base_delay_ms: int = 1000
     executor_retry_max_delay_ms: int = 30000
 
+    # -- Notifications --
+    smtp_host: str = "localhost"
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""
+    smtp_to: str = ""
+    smtp_use_tls: bool = True
+
+    telegram_bot_token: str = ""
+    telegram_chat_ids: str = ""
+
+    slack_webhook_url: str = ""
+
     # -- CORS --
     cors_allowed_origins: str = ""
 
