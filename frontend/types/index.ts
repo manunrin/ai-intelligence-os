@@ -58,6 +58,7 @@ export type AgentRun = {
   finished_at: string | null;
   duration_ms: number | null;
   user_id: string | null;
+  retry_count?: number;
 } & Record<string, unknown>;
 
 export type Task = {

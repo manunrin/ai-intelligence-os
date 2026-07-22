@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -33,6 +33,7 @@ class AgentRun(Base):
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    retry_count: Mapped[int] = mapped_column(Integer, default=0)
 
     agent = relationship("Agent", back_populates="runs", foreign_keys="AgentRun.agent_id")
     workflow = relationship("Workflow", back_populates="runs", foreign_keys="AgentRun.workflow_id")

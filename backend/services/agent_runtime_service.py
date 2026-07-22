@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from ..repositories.agent_run_repository import AgentRunRepository
 from ..repositories.agent_stage_progress_repository import AgentStageProgressRepository
 from ..workflows.executor import Executor, PipelineFactory, RunResult, SyncExecutor
+from ..workflows.retry_executor import RetryExecutor
 from ..workflows.registry import PIPELINE_REGISTRY
 from ..context_vars import agent_run_id as _agent_ctx, trace_span as _trace_ctx
 from ..metrics import counter, histogram
@@ -51,6 +52,7 @@ def _run_to_dict(run: Any) -> dict[str, Any]:
         "finished_at": run.finished_at.isoformat() if run.finished_at else None,
         "duration_ms": run.duration_ms,
         "user_id": str(run.user_id) if run.user_id else None,
+        "retry_count": getattr(run, "retry_count", 0),
         "recovered_at": run.recovered_at.isoformat() if getattr(run, "recovered_at", None) else None,
     }
 
@@ -108,7 +110,12 @@ class AgentRuntimeService:
                     "AgentRuntimeService requires a session_factory when "
                     "initialized with a direct AsyncSession"
                 )
-        self._executor: Executor = SyncExecutor()
+        self._executor: Executor = RetryExecutor(
+            SyncExecutor(),
+            max_attempts=getattr(self, '_retry_max_attempts', 3),
+            base_delay_ms=getattr(self, '_retry_base_delay_ms', 1000),
+            max_delay_ms=getattr(self, '_retry_max_delay_ms', 30000),
+        )
         self._cancellation_tokens: dict[uuid.UUID, bool] = {}
         self._run_tasks: dict[uuid.UUID, asyncio.Task | None] = {}
         self._checkpointer: Any = checkpointer
@@ -272,28 +279,38 @@ class AgentRuntimeService:
 
                 if result.status == "cancelled":
                     await self._finalize_cancelled(repo, run_id, result)
-                elif result.status in ("completed", "failed"):
+                elif result.status == "completed":
                     await self._finalize_completed(repo, stage_repo, run_id, result, callback.events)
+                elif result.status == "failed":
+                    await self._finalize_failed(
+                        repo, run_id, result, retry_count=result.retry_count,
+                    )
                 else:
                     # Any other status (e.g., timeout from executor itself)
                     logger.warning("Run %s ended with unexpected status: %s", str(run_id), result.status)
 
             except asyncio.TimeoutError:
                 logger.warning("Run %s exceeded %ds timeout", str(run_id), timeout_seconds)
-                await self._finalize_failed(repo, run_id, RunResult(
-                    status="timeout",
-                    run_id=run_id,
-                    error_message=f"Run exceeded {timeout_seconds}s timeout",
-                ))
+                await self._finalize_failed(
+                    repo, run_id, RunResult(
+                        status="timeout",
+                        run_id=run_id,
+                        error_message=f"Run exceeded {timeout_seconds}s timeout",
+                    ),
+                    retry_count=0,
+                )
                 counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": "timeout"})
 
             except Exception as exc:
                 logger.exception("Unexpected error in run %s", str(run_id))
-                await self._finalize_failed(repo, run_id, RunResult(
-                    status="failed",
-                    run_id=run_id,
-                    error_message=str(exc),
-                ))
+                await self._finalize_failed(
+                    repo, run_id, RunResult(
+                        status="failed",
+                        run_id=run_id,
+                        error_message=str(exc),
+                    ),
+                    retry_count=0,
+                )
                 counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": "error"})
 
             finally:
@@ -324,7 +341,14 @@ class AgentRuntimeService:
         await self._persist_stages(stage_repo, run_id, events)
         logger.info("Run %s completed in %d ms", str(run_id), result.duration_ms or 0)
 
-    async def _finalize_failed(self, repo: AgentRunRepository, run_id: uuid.UUID, result: RunResult) -> None:
+    async def _finalize_failed(
+        self,
+        repo: AgentRunRepository,
+        run_id: uuid.UUID,
+        result: RunResult,
+        *,
+        retry_count: int = 0,
+    ) -> None:
         now = _utcnow()
         await repo.update(
             run_id,
@@ -334,8 +358,9 @@ class AgentRuntimeService:
             error_message=result.error_message,
             finished_at=now,
             duration_ms=result.duration_ms,
+            retry_count=retry_count,
         )
-        logger.warning("Run %s failed: %s", str(run_id), result.error_message)
+        logger.warning("Run %s failed: %s (retries: %d)", str(run_id), result.error_message, retry_count)
 
     async def _finalize_cancelled(self, repo: AgentRunRepository, run_id: uuid.UUID, result: RunResult) -> None:
         now = _utcnow()

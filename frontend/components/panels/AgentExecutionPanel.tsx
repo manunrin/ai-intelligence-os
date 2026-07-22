@@ -27,6 +27,8 @@ const STATUS_VARIANTS: Record<string, "default" | "success" | "warning" | "dange
   cancelled: "muted",
   cancelling: "warning",
   timeout: "danger",
+  interrupted: "warning",
+  recovered: "warning",
 };
 
 const STAGE_ORDER = [
@@ -292,6 +294,9 @@ function RunHistoryCard({ run, onViewDetails }: { run: AgentRun; onViewDetails: 
             <span className="tabular-nums">{formatDuration(run.duration_ms)}</span>
             {run.started_at && (
               <span>{new Date(run.started_at).toLocaleString()}</span>
+            )}
+            {(run as any).retry_count > 0 && (
+              <span className="text-red-500 dark:text-red-400">retry {(run as any).retry_count}</span>
             )}
             {run.stage && (
               <span className="truncate">Stage: {run.stage}</span>

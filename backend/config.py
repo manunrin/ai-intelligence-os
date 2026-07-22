@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     rate_limit_login_requests: int = 100
     rate_limit_login_window_seconds: int = 60
 
+    # -- Executor Retry --
+    executor_retry_max_attempts: int = 3
+    executor_retry_base_delay_ms: int = 1000
+    executor_retry_max_delay_ms: int = 30000
+
     # -- CORS --
     cors_allowed_origins: str = ""
 

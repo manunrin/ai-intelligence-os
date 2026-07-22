@@ -26,6 +26,7 @@ class RunResult:
     duration_ms: int | None = None
     finished_at: datetime | None = None
     stages: list[dict[str, Any]] = field(default_factory=list)
+    retry_count: int = 0  # Number of retries after initial attempt (0 = no retries).
 
 
 class Executor:
