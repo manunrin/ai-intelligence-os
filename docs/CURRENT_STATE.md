@@ -293,6 +293,33 @@ Full stabilization of Phase 9.6 runtime features completed across backend and fr
 
 ---
 
+## Phase 10.2.2-A — Executor Retry Mechanism (COMPLETE — 2026-07-22)
+
+**Completed tasks:**
+
+- **Error classifier** — `backend/workflows/error_classifier.py` classifies errors as TRANSIENT (retryable: timeouts, rate limits, connection errors) or PERMANENT (not retryable: validation, auth, model-not-found). Permanent patterns checked first for priority. Heuristic MVP — documented that future versions should classify typed exceptions directly.
+- **RetryExecutor** — `backend/workflows/retry_executor.py` wraps SyncExecutor with exponential backoff retry logic. Handles both failure modes: inner.execute() returning a failed RunResult AND inner.execute() raising transient exceptions. Backoff formula: `min(base_delay * 2^(attempt-1), max_delay)`.
+- **retry_count semantics** — `retry_count` = number of retries AFTER initial attempt. `max_attempts=3` means 1 initial + up to 2 retries → max `retry_count=2`. First success = 0.
+- **RunResult extension** — Added `retry_count: int = 0` field to RunResult dataclass.
+- **AgentRuntimeService wiring** — Wrapped executor with `RetryExecutor(SyncExecutor())` in `__init__()`. Split `_execute_run()` path so "failed" status goes to `_finalize_failed()` (not `_finalize_completed()`) with retry_count persisted. Updated `_run_to_dict()` serialization.
+- **Configuration** — Added `executor_retry_max_attempts`, `executor_retry_base_delay_ms`, `executor_retry_max_delay_ms` to Settings class.
+- **Database migration** — Migration 0008 adds `retry_count INTEGER NOT NULL DEFAULT 0` with `server_default="0"` to agent_runs table.
+- **Frontend display** — AgentRun type extended with `retry_count?: number`. RunHistoryCard shows red "retry N" badge next to failed runs with retries. STATUS_VARIANTS extended with `"interrupted"` and `"recovered"` entries.
+- **Unit tests** — 40 new tests: 28 in `test_error_classifier.py` (transient/permanent classification, priority ordering, fallback), 12 in `test_retry_executor.py` (completed immediately, permanent no-retry, transient retries, exhaustion, raised exceptions, cancelled not retried, validation). Full suite: 56 tests pass.
+
+**Known limitations:**
+- Error classification is heuristic MVP based on error message strings; future versions should use typed exception matching and LiteLLM's exception hierarchy.
+- Retries depend on LangGraph checkpoint semantics — side-effect tools should be idempotent to avoid duplicate effects across retries.
+- Circuit breaker and Dead Letter Queue are deferred to future Phase 10.2.x sub-phases.
+
+**Final commit:**
+
+| Commit | Message |
+|--------|---------|
+| `23e44c2` | feat: add executor retry mechanism |
+
+---
+
 ## Completed Milestones
 
 ### Infrastructure & Foundation (Phases 1–2)
@@ -377,7 +404,10 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 
 ### Phase 10.2 — Next Steps
 
-- Test resume API end-to-end: submit a run, interrupt/cancel it, verify Resume button works and pipeline continues from checkpoint.
+- **Phase 10.2.2-A: Executor Retry** — COMPLETE. Transient error retry with exponential backoff, retry_count tracking, frontend badge display.
 - Tune recovery scan `max_hours` window based on operational experience.
 - Add Prometheus/Grafana dashboards for agent runtime metrics.
 - Implement resume validation to ensure checkpoint pipeline type matches original submission.
+- Consider Phase 10.2.2-B: Notification Channels (SMTP, Telegram, Slack).
+- Consider Phase 10.2.2-C: Scheduler API + Persistence.
+- Consider Phase 10.2.2-D: Refresh Tokens.
