@@ -42,19 +42,26 @@ def build_intelligence_graph() -> StateGraph:
     return graph
 
 
-def compile_intelligence_graph(checkpoint: bool = False) -> Any:
+def compile_intelligence_graph(
+    checkpointer: Any = None,
+    checkpoint: bool = False,
+) -> Any:
     """Build and compile the graph into an executable application.
 
     Args:
-        checkpoint: If True, enables state checkpoints for persistence
-            and human-in-the-loop capabilities.
+        checkpointer: Optional LangGraph checkpointer for persistent state.
+            If provided, it takes precedence over ``checkpoint``.
+        checkpoint: If True and no checkpointer is provided, enables
+            in-memory checkpoints via MemorySaver.
 
     Returns:
         Compiled LangGraph application (RunnableGenerator).
     """
     graph = build_intelligence_graph()
     compile_kwargs: dict[str, Any] = {}
-    if checkpoint:
+    if checkpointer is not None:
+        compile_kwargs["checkpointer"] = checkpointer
+    elif checkpoint:
         from langgraph.checkpoint.memory import MemorySaver
         compile_kwargs["checkpointer"] = MemorySaver()
 

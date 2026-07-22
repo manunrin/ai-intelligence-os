@@ -31,6 +31,8 @@ const STATUS_VARIANTS: Record<string, "default" | "success" | "warning" | "dange
   cancelled: "muted",
   cancelling: "warning",
   timeout: "danger",
+  interrupted: "warning",
+  recovered: "warning",
 };
 
 function formatDuration(ms: number | null): string {
@@ -186,7 +188,7 @@ export function AgentsPanel({ runs, isLoading }: AgentsPanelProps) {
 
             if (key === "_actions") {
               const isRunning = r.status === "running" || r.status === "cancelling";
-              const isTerminal = r.status === "completed" || r.status === "failed" || r.status === "cancelled";
+              const isTerminal = r.status === "completed" || r.status === "failed" || r.status === "cancelled" || r.status === "interrupted";
               return (
                 <div className="flex items-center gap-1">
                   {isRunning && (
@@ -221,7 +223,7 @@ export function AgentsPanel({ runs, isLoading }: AgentsPanelProps) {
                       Details
                     </Button>
                   )}
-                  {r.status === "completed" && (
+                  {(r.status === "completed" || r.status === "interrupted") && (
                     <Button
                       variant="ghost"
                       size="sm"

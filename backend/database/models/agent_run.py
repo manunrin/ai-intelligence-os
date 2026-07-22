@@ -24,6 +24,12 @@ class AgentRun(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(nullable=True)
     stage: Mapped[str] = mapped_column(String(64), default="initializing")
+    thread_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, index=True
+    )
+    recovered_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )

@@ -45,6 +45,7 @@ class Executor:
         user_id: uuid.UUID,
         session: AsyncSession,
         cancellation_token: dict[uuid.UUID, bool],
+        thread_id: str | None = None,
     ) -> RunResult:
         raise NotImplementedError
 
@@ -60,11 +61,12 @@ class SyncExecutor(Executor):
         user_id: uuid.UUID,
         session: AsyncSession,
         cancellation_token: dict[uuid.UUID, bool],
+        thread_id: str | None = None,
     ) -> RunResult:
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(
             None,
-            lambda: _sync_execute_impl(run_id, factory, state, user_id, session, cancellation_token),
+            lambda: _sync_execute_impl(run_id, factory, state, user_id, session, cancellation_token, thread_id),
         )
 
 
@@ -80,21 +82,31 @@ def _sync_execute_impl(
     user_id: uuid.UUID,
     session: AsyncSession,
     cancellation_token: dict[uuid.UUID, bool],
+    thread_id: str | None = None,
 ) -> RunResult:
     """Synchronous execution of a compiled LangGraph app.
 
     Uses .astream() because graph nodes are async coroutines.
     Runs the event loop inline so cancellation works between steps.
+
+    Args:
+        thread_id: Optional LangGraph checkpoint thread ID. If provided,
+            the compiled graph will persist state under this thread.
     """
     start_time = datetime.now(timezone.utc)
     try:
         graph_app = factory()
 
+        # Build config with thread_id for checkpoint persistence
+        config: dict[str, Any] = {}
+        if thread_id:
+            config["configurable"] = {"thread_id": thread_id}
+
         # Run the async stream in an inline event loop
         _loop = asyncio.new_event_loop()
         try:
             chunks = _loop.run_until_complete(
-                _stream_with_cancel(graph_app, state, run_id, cancellation_token)
+                _stream_with_cancel(graph_app, state, run_id, cancellation_token, config)
             )
         finally:
             _loop.close()
@@ -126,10 +138,13 @@ def _sync_execute_impl(
         )
 
 
-async def _stream_with_cancel(graph_app, state, run_id, cancellation_token):
+async def _stream_with_cancel(graph_app, state, run_id, cancellation_token, config=None):
     """Stream from an async graph, checking cancellation between steps."""
     chunks = []
-    async for chunk in graph_app.astream(state):
+    kwargs: dict[str, Any] = {}
+    if config is not None:
+        kwargs["config"] = config
+    async for chunk in graph_app.astream(state, **kwargs):
         if cancellation_token.get(run_id, False):
             return chunks  # partial result
         if chunk is not None:

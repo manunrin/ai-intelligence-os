@@ -74,6 +74,30 @@ async def lifespan(app: FastAPI):
     vector_service = QdrantVectorService(url=settings.qdrant_url)
     await vector_service.ensure_collection()
 
+    # ── LangGraph Checkpointer initialization ──
+    from psycopg_pool import ConnectionPool
+    from langgraph.checkpoint.postgres.shallow import AsyncShallowPostgresSaver
+
+    db_url = settings.database_url
+    checkpoint_pool = ConnectionPool(
+        conninfo=db_url,
+        min_size=1,
+        max_size=2,
+        open=True,
+        kwargs={"autocommit": True},
+    )
+
+    checkpointer = AsyncShallowPostgresSaver(conn=checkpoint_pool)
+    try:
+        await checkpointer.setup()
+        logger.info("Checkpointer initialized with AsyncShallowPostgresSaver")
+    except Exception as exc:
+        logger.warning("Checkpointer setup failed: %s", exc)
+        checkpointer = None
+
+    app.state.checkpointer = checkpointer
+    app.state.checkpoint_pool = checkpoint_pool
+
     app.state.bootstrap = _bootstrap
     app.state.mcp_registry = _bootstrap.mcp_registry
     app.state.tool_registry = _bootstrap.tool_registry
@@ -85,6 +109,20 @@ async def lifespan(app: FastAPI):
     app.state.vector_service = vector_service
 
     logger.info("Backend startup complete — MCP servers: %s", list(_bootstrap.mcp_registry.list_servers().keys()))
+
+    # ── Agent run recovery scan ──────────────────────────────────────
+    try:
+        from .services.agent_runtime_service import AgentRuntimeService
+        runtime_svc = AgentRuntimeService(
+            session_factory=lambda: session_factory(),
+        )
+        await runtime_svc._recover_stale_runs(
+            checkpointer=checkpointer,
+            max_hours=24,
+        )
+        logger.info("Agent run recovery scan complete")
+    except Exception:
+        logger.warning("Recovery scan failed (non-fatal)", exc_info=True)
 
     yield
 

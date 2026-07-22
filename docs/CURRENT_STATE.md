@@ -184,6 +184,33 @@ Full stabilization of Phase 9.6 runtime features completed across backend and fr
 
 ---
 
+## Phase 10 — External Integrations (IN PROGRESS)
+
+### Phase 10.1 — Runtime Persistence (COMPLETE — 2026-07-22)
+
+**Completed tasks:**
+
+- **Database migration 0007** — `0007_add_agent_run_persistence.py` adds `thread_id VARCHAR(128)` (nullable, indexed) and `recovered_at TIMESTAMPTZ` columns to `agent_runs` table. Migration chain verified: base → 0001 → ... → 0006 → **0007 (head)**. Applied to PostgreSQL via Docker container; DB confirmed at head revision.
+- **Checkpointer initialization** — `main.py` lifespan initializes `AsyncShallowPostgresSaver` with `ConnectionPool`, calls `await saver.setup()`, stores on `app.state.checkpointer`.
+- **Pipeline compilation** — `compile_intelligence_graph(checkpointer)` and `compile_autonomous_intelligence(checkpointer)` accept persistent checkpointer; fall back to `MemorySaver` when `checkpoint=True`.
+- **Executor thread_id** — `SyncExecutor.execute()` accepts optional `thread_id`; `_sync_execute_impl` builds `config["configurable"] = {"thread_id": ...}` and passes to `_stream_with_cancel`.
+- **Submit thread_id** — `submit()` generates `thread_id=f"agent-run-{run_id}"` for both DB record and background task.
+- **Recovery scan** — `_recover_stale_runs()` in `AgentRuntimeService` queries stale runs (`status IN ('running', 'cancelling')` AND `started_at < cutoff` default 24h AND `thread_id IS NOT NULL`). For each stale run, calls `checkpointer.aget_tuple({"configurable": {"thread_id": ...}})`:
+  - **Checkpoint exists** → marks `status="interrupted"`, `stage="recovered"`, sets `recovered_at`, records error message explaining interruption and recoverability. Uses `"interrupted"` (NOT `"completed"`) because a checkpoint only proves state was persisted mid-run, not that the pipeline finished.
+  - **No checkpoint** → marks `status="failed"`, `stage="no_checkpoint"`, writes descriptive error message.
+  - **Lookup error** → same as no checkpoint (failsafe).
+  - Returns `{"checked": N, "recovered": N, "marked_failed": N}`.
+- **Startup wiring** — Recovery scan runs after checkpointer initialization, before `yield` in lifespan. Uses dedicated `AgentRuntimeService(session_factory=...)` instance. Non-fatal: wrapped in try/except, logs warning on failure.
+- **Serialization** — `_run_to_dict()` includes `recovered_at` field (ISO string or null).
+- **Frontend status display** — `AgentsPanel.tsx` `STATUS_VARIANTS` extended: `interrupted: "warning"`, `recovered: "warning"`. `isTerminal` now includes `"interrupted"` — recovered runs show Details button. Re-run button shows for both `"completed"` and `"interrupted"` statuses.
+- **Tests** — 11 unit tests in `tests/unit/services/test_agent_runtime.py` — all passing. Covers: no checkpointer, empty query, checkpoint found, no checkpoint, lookup error, mixed results, cancelling status, completed runs excluded, null thread_id, `_run_to_dict` serialization.
+
+**Known limitations:**
+- End-to-end verification pending: need to submit an agent run, verify checkpoint written to PostgreSQL, and confirm recovery scan detects it correctly.
+- Recovery scan currently uses a fixed 24-hour window; may need tuning based on operational experience.
+
+---
+
 ## Completed Milestones
 
 ### Infrastructure & Foundation (Phases 1–2)
@@ -223,38 +250,6 @@ Full stabilization of Phase 9.6 runtime features completed across backend and fr
 
 ---
 
-## Current Architecture
-
-```
-User → Next.js (frontend/:3000) → FastAPI (backend/:8000) → LangGraph Workflows → AI Agents
-                                         ↓                    ↓
-                                   PostgreSQL 16           MCP Servers
-                                   Qdrant                  Notion/Asana/Browser/GitHub
-                                   Redis 7                 APScheduler
-                                   MinIO
-```
-
-**Backend Layers:**
-- Routers (`routers/`) — 7 sub-routers (auth, articles, knowledge, tasks, agents, reports, audit) under single `/api/v1` prefix
-- Services (`services/`) — Business logic across 10+ service modules including embedding, vector, RAG, knowledge, LLM routing
-- Repositories (`repositories/`) — BaseRepository[T] with specialized CRUD per entity
-- Models (`database/models/`) — 9 ORM entities with relationships
-- Schemas (`schemas/`) — Pydantic v2 response models + APIResponse envelope
-
-**Frontend Structure:**
-- `app/` — Next.js App Router with 5 route groups (dashboard, knowledge, agents, login, register). Reports and Tasks are dashboard tabs, not standalone routes.
-- `components/panels/` — Domain panels (KnowledgePanel, ReportsPanel, TasksPanel, AgentsPanel, ArticlesPanel, DashboardPanel, etc.)
-- `components/ui/` — 11 shared UI components (Button, Badge, Card, Table, Input, Modal, Select, Textarea, StatCard, MetricCard, EmptyState)
-- `components/knowledge/` — Form bodies (KnowledgeForm)
-- `hooks/` — @tanstack/react-query hooks (useKnowledge, useArticles, useTasks, useReports, useAgentRuns, useAgentStream, useRAGQuery)
-- `lib/` — API client, auth context, query client, toast system, observability
-
-**Workers/Jobs:**
-- `workers/jobs/` — Job execution modules including ArticlePipeline (per-article LangGraph execution with research → analyst → translator nodes)
-- `workers/scheduler/` — APScheduler-based job scheduling with cron expressions
-
----
-
 ## Recent Changes (last 10 commits)
 
 | Commit | Message |
@@ -280,7 +275,7 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 2. **No frontend auth UI** — Login forms, token storage, auto-attach headers not yet wired to backend auth.
 3. **Pagination UI missing** — Backend supports offset/limit but frontend has no pagination controls.
 4. **Report PUT/DELETE not implemented** — Out of scope for Phase 6-D.1.
-5. **Agent run creates record only** — Workflow execution triggered but not wired to LangGraph runner.
+5. **Agent run creates record only** — Workflow execution triggered but not wired to LangGraph runner. *(Partially addressed in Phase 10.1: thread_id generation, checkpointer wiring, migration, recovery scan, and frontend updates all completed. End-to-end verification still pending.)*
 6. **No per-tab loading states** — Dashboard shows all-or-nothing loading.
 7. **No error boundaries** — Individual sections don't recover independently.
 8. **LiteLLM Gateway not deployed** — Configured in docker-compose.yml but litellm service not included.
@@ -298,12 +293,9 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 
 ## Next Recommended Tasks
 
-### Phase 10 — External Integrations (next)
+### Phase 10.2 — Next Steps
 
-See `docs/proposals/phase-10-roadmap.md` for detailed plan.
-
-High-priority items:
-- New data connectors (Hacker News RSS, arXiv API first; Twitter/X and LinkedIn require credentials)
-- Real notification channels (Email SMTP, Telegram Bot, Slack Webhook)
-- Bidirectional MCP sync (Notion page changes, Asana task completion, GitHub issue creation)
-- Add Prometheus/Grafana services to Docker Compose
+- End-to-end verification: submit an agent run, verify checkpoint written to PostgreSQL, confirm recovery scan detects it correctly.
+- Tune recovery scan `max_hours` window based on operational experience.
+- Implement resume API so interrupted runs can be resumed from their checkpoint.
+- Add Prometheus/Grafana dashboards for agent runtime metrics.

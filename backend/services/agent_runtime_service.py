@@ -17,7 +17,7 @@ import logging
 import uuid
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -51,6 +51,7 @@ def _run_to_dict(run: Any) -> dict[str, Any]:
         "finished_at": run.finished_at.isoformat() if run.finished_at else None,
         "duration_ms": run.duration_ms,
         "user_id": str(run.user_id) if run.user_id else None,
+        "recovered_at": run.recovered_at.isoformat() if getattr(run, "recovered_at", None) else None,
     }
 
 
@@ -176,6 +177,7 @@ class AgentRuntimeService:
             finished_at=None,
             duration_ms=None,
             user_id=user_id,
+            thread_id=f"agent-run-{run_id}",
         )
 
         logger.info("Agent run submitted: type=%s run=%s", agent_type, str(run_id))
@@ -209,6 +211,7 @@ class AgentRuntimeService:
                 pipeline_type=agent_type,
                 state=input_payload,
                 timeout_seconds=timeout_seconds,
+                thread_id=f"agent-run-{run_id}",
             )
         )
         self._run_tasks[run_id] = bg_task
@@ -221,6 +224,7 @@ class AgentRuntimeService:
         pipeline_type: str,
         state: dict[str, Any],
         timeout_seconds: int,
+        thread_id: str | None = None,
     ) -> None:
         """Execute a run in the background with its own DB session."""
         from ..trace import start_span
@@ -252,6 +256,7 @@ class AgentRuntimeService:
                         user_id=state.get("user_id") if isinstance(state.get("user_id"), uuid.UUID) else None or run_id,
                         session=session,
                         cancellation_token=self._cancellation_tokens,
+                        thread_id=thread_id,
                     ),
                     timeout=timeout_seconds,
                 )
@@ -490,3 +495,150 @@ class AgentRuntimeService:
                 "nodes": 6,
             },
         ]
+
+    async def _recover_stale_runs(
+        self,
+        checkpointer: Any | None = None,
+        max_hours: int = 24,
+    ) -> dict[str, int]:
+        """Recover stale agent runs by checking LangGraph checkpoint existence.
+
+        Scans for runs in 'running' or 'cancelling' state whose thread_id
+        still has a valid checkpoint in LangGraph. If a checkpoint exists,
+        the run is marked as 'recovered'; otherwise it is marked as 'failed'
+        with a recovery error note.
+
+        Args:
+            checkpointer: AsyncShallowPostgresSaver instance from app.state.
+            max_hours: Only consider runs started more than this many hours ago.
+
+        Returns:
+            Dict with counts: {'checked': N, 'recovered': N, 'marked_failed': N}
+        """
+        from sqlalchemy import select
+        from ..database.models import AgentRun
+
+        if not checkpointer:
+            logger.warning("No checkpointer provided; skipping recovery scan")
+            return {"checked": 0, "recovered": 0, "marked_failed": 0}
+
+        repo, _ = _make_repo(self._request_session)
+
+        # Query stale runs: status is running/cancelling AND started > max_hours ago
+        cutoff = _utcnow() - timedelta(hours=max_hours)
+        stmt = (
+            select(AgentRun)
+            .where(
+                AgentRun.status.in_(["running", "cancelling"]),
+                AgentRun.started_at < cutoff,
+                AgentRun.thread_id.isnot(None),
+            )
+            .order_by(AgentRun.started_at.asc())
+        )
+        result = await self._request_session.execute(stmt)
+        stale_runs = list(result.scalars().all())
+
+        if not stale_runs:
+            logger.info("No stale runs found within %dh window", max_hours)
+            return {"checked": 0, "recovered": 0, "marked_failed": 0}
+
+        logger.info(
+            "Recovery scan: found %d stale runs (started > %dh ago)",
+            len(stale_runs),
+            max_hours,
+        )
+
+        recovered_count = 0
+        failed_count = 0
+
+        for run in stale_runs:
+            thread_id = run.thread_id
+            if not thread_id:
+                continue
+
+            # Check if checkpoint exists for this thread_id
+            config = {"configurable": {"thread_id": thread_id}}
+            try:
+                checkpoint_tuple = await checkpointer.aget_tuple(config)
+            except Exception as exc:
+                logger.error(
+                    "Checkpoint lookup failed for thread_id=%s: %s",
+                    thread_id,
+                    exc,
+                )
+                # Treat lookup failure as no checkpoint → mark failed
+                await repo.update(
+                    run.id,
+                    status="failed",
+                    stage="recovery_failed",
+                    error_message=f"Recovery: checkpoint lookup failed: {exc}",
+                    finished_at=_utcnow(),
+                )
+                await self._request_session.commit()
+                failed_count += 1
+                continue
+
+            if checkpoint_tuple is not None:
+                # Checkpoint exists → run was interrupted but state can be recovered
+                now = _utcnow()
+                await repo.update(
+                    run.id,
+                    status="interrupted",
+                    stage="recovered",
+                    recovered_at=now,
+                    output_payload={
+                        "recovered": True,
+                        "checkpoint_version": str(
+                            checkpoint_tuple.config.get("configurable", {}).get(
+                                "thread_ts", "unknown"
+                            )
+                        ),
+                    },
+                    error_message=(
+                        "Run was interrupted; checkpoint found at version "
+                        f"{checkpoint_tuple.config.get('configurable', {}).get('thread_ts', 'unknown')}. "
+                        "State is recoverable via resume API."
+                    ),
+                    finished_at=now,
+                )
+                await self._request_session.commit()
+                recovered_count += 1
+                logger.info(
+                    "Recovered run %s (thread_id=%s, checkpoint version=%s)",
+                    str(run.id),
+                    thread_id,
+                    checkpoint_tuple.config.get("configurable", {}).get(
+                        "thread_ts", "unknown"
+                    ),
+                )
+            else:
+                # No checkpoint → mark as failed with recovery error
+                await repo.update(
+                    run.id,
+                    status="failed",
+                    stage="no_checkpoint",
+                    error_message=(
+                        "Recovery: no LangGraph checkpoint found for thread_id="
+                        f"{thread_id}; run likely lost state."
+                    ),
+                    finished_at=_utcnow(),
+                )
+                await self._request_session.commit()
+                failed_count += 1
+                logger.info(
+                    "Marked run %s as failed: no checkpoint for thread_id=%s",
+                    str(run.id),
+                    thread_id,
+                )
+
+        logger.info(
+            "Recovery scan complete: checked=%d, recovered=%d, marked_failed=%d",
+            len(stale_runs),
+            recovered_count,
+            failed_count,
+        )
+        return {
+            "checked": len(stale_runs),
+            "recovered": recovered_count,
+            "marked_failed": failed_count,
+        }

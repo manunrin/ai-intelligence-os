@@ -1,0 +1,23 @@
+global:
+  scrape_interval: ${PROMETHEUS_SCRAPE_INTERVAL:-30s}
+  evaluation_interval: 30s
+  scrape_timeout: 10s
+
+alerting:
+  alertmanagers: []
+
+rule_files:
+  - /etc/prometheus/alerts.yaml
+
+scrape_configs:
+  - job_name: "ai-intelligence-os-backend"
+    metrics_path: "/metrics"
+    static_configs:
+      - targets: ["backend:8000"]
+        labels:
+          service: "ai-intelligence-os"
+          environment: "${APP_ENV:-development}"
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

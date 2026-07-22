@@ -82,13 +82,17 @@ def build_autonomous_intelligence_graph(
 
 
 def compile_autonomous_intelligence(
+    checkpointer: Any = None,
     checkpoint: bool = False,
     **graph_kwargs: Any,
 ) -> Any:
     """Build and compile the autonomous intelligence graph.
 
     Args:
-        checkpoint: If True, enables state checkpoints.
+        checkpointer: Optional LangGraph checkpointer for persistent state.
+            If provided, it takes precedence over ``checkpoint``.
+        checkpoint: If True and no checkpointer is provided, enables
+            in-memory checkpoints via MemorySaver.
         **graph_kwargs: Passed to build_autonomous_intelligence_graph.
 
     Returns:
@@ -96,7 +100,9 @@ def compile_autonomous_intelligence(
     """
     graph = build_autonomous_intelligence_graph(**graph_kwargs)
     compile_kwargs: dict[str, Any] = {}
-    if checkpoint:
+    if checkpointer is not None:
+        compile_kwargs["checkpointer"] = checkpointer
+    elif checkpoint:
         from langgraph.checkpoint.memory import MemorySaver
         compile_kwargs["checkpointer"] = MemorySaver()
 
