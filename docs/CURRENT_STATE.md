@@ -191,7 +191,7 @@ Full stabilization of Phase 9.6 runtime features completed across backend and fr
 **Completed tasks:**
 
 - **Database migration 0007** — `0007_add_agent_run_persistence.py` adds `thread_id VARCHAR(128)` (nullable, indexed) and `recovered_at TIMESTAMPTZ` columns to `agent_runs` table. Migration chain verified: base → 0001 → ... → 0006 → **0007 (head)**. Applied to PostgreSQL via Docker container; DB confirmed at head revision.
-- **Checkpointer initialization** — `main.py` lifespan initializes `AsyncShallowPostgresSaver` with `ConnectionPool`, calls `await saver.setup()`, stores on `app.state.checkpointer`.
+- **Checkpointer initialization** — `main.py` lifespan initializes `AsyncShallowPostgresSaver` with `AsyncConnectionPool`, calls `await saver.setup()`, stores on `app.state.checkpointer`. Uses raw DB URL (strips `postgresql+asyncpg://` prefix) for psycopg compatibility.
 - **Pipeline compilation** — `compile_intelligence_graph(checkpointer)` and `compile_autonomous_intelligence(checkpointer)` accept persistent checkpointer; fall back to `MemorySaver` when `checkpoint=True`.
 - **Executor thread_id** — `SyncExecutor.execute()` accepts optional `thread_id`; `_sync_execute_impl` builds `config["configurable"] = {"thread_id": ...}` and passes to `_stream_with_cancel`.
 - **Submit thread_id** — `submit()` generates `thread_id=f"agent-run-{run_id}"` for both DB record and background task.
@@ -204,10 +204,30 @@ Full stabilization of Phase 9.6 runtime features completed across backend and fr
 - **Serialization** — `_run_to_dict()` includes `recovered_at` field (ISO string or null).
 - **Frontend status display** — `AgentsPanel.tsx` `STATUS_VARIANTS` extended: `interrupted: "warning"`, `recovered: "warning"`. `isTerminal` now includes `"interrupted"` — recovered runs show Details button. Re-run button shows for both `"completed"` and `"interrupted"` statuses.
 - **Tests** — 11 unit tests in `tests/unit/services/test_agent_runtime.py` — all passing. Covers: no checkpointer, empty query, checkpoint found, no checkpoint, lookup error, mixed results, cancelling status, completed runs excluded, null thread_id, `_run_to_dict` serialization.
+- **Dependencies** — Added `langgraph-checkpoint-postgres>=2.0.0` and `psycopg[binary]>=3.2.0` to `pyproject.toml`.
+
+**E2E Verification Results:**
+
+- ✅ **AsyncConnectionPool works** — Switched from `SyncConnectionPool` to `AsyncConnectionPool` with raw DB URL (stripped `postgresql+asyncpg://` prefix). Checkpointer initializes without errors at startup.
+- ✅ **Checkpointer DI wired end-to-end** — `get_runtime_service()` in `deps.py` now injects `checkpointer` from `app.state`. AgentRuntimeService stores it and passes to pipeline compilation.
+- ✅ **Pipeline receives checkpointer** — `compile_intelligence_graph()` and `compile_autonomous_intelligence()` accept checkpointer parameter and pass it through to LangGraph state graph compilation.
+- ✅ **Recovery scan uses correct checkpointer** — `_recover_stale_runs()` falls back to `self._checkpointer` when not explicitly provided. Lookup uses stored instance instead of app.state reference.
+- ✅ **Migration 0007 applied** — `thread_id` and `recovered_at` columns present in `agent_runs` table. Index on `thread_id` confirmed.
+- ✅ **Working tree clean** — All 4 fix files committed, no untracked artifacts.
+
+**Final commits:**
+
+| Commit | Message |
+|--------|---------|
+| `afac5aa` | feat: complete phase 10.1 runtime persistence and observability |
+| `d0a7d24` | fix: complete phase 10.1 runtime persistence e2e fixes |
 
 **Known limitations:**
-- End-to-end verification pending: need to submit an agent run, verify checkpoint written to PostgreSQL, and confirm recovery scan detects it correctly.
+
+- End-to-end agent run submission not yet tested against live pipeline — need to submit a real run, verify checkpoint written to PostgreSQL, and confirm recovery scan detects it correctly.
 - Recovery scan currently uses a fixed 24-hour window; may need tuning based on operational experience.
+- Resume API not implemented — interrupted runs cannot be resumed from checkpoint yet.
+- No Prometheus/Grafana dashboards for agent runtime metrics.
 
 ---
 
@@ -295,7 +315,7 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 
 ### Phase 10.2 — Next Steps
 
-- End-to-end verification: submit an agent run, verify checkpoint written to PostgreSQL, confirm recovery scan detects it correctly.
-- Tune recovery scan `max_hours` window based on operational experience.
+- End-to-end agent run: submit a real run, verify checkpoint written to PostgreSQL, confirm recovery scan detects it correctly.
 - Implement resume API so interrupted runs can be resumed from their checkpoint.
+- Tune recovery scan `max_hours` window based on operational experience.
 - Add Prometheus/Grafana dashboards for agent runtime metrics.
