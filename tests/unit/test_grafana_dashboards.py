@@ -24,6 +24,7 @@ KNOWN_METRICS = {
     "agent_runs_total",
     "agent_run_duration_seconds",
     "agent_stages_total",
+    "agent_run_retries_total",
     # LLM
     "llm_requests_total",
     "llm_request_duration_seconds",
@@ -43,7 +44,7 @@ KNOWN_METRICS = {
 # Prometheus label names used across all metrics
 KNOWN_LABELS = {
     "status", "method", "path", "provider", "model", "agent_type",
-    "stage_name", "operation", "result", "le",
+    "stage_name", "operation", "result", "le", "trigger", "attempt",
 }
 
 # All PromQL functions used in dashboards
@@ -220,11 +221,11 @@ class TestPanelCounts:
     def test_ai_ops_has_7_panels(self, ai_ops_dashboard):
         assert len(ai_ops_dashboard["panels"]) == 7
 
-    def test_agent_perf_has_5_panels(self, agent_perf_dashboard):
-        assert len(agent_perf_dashboard["panels"]) == 5
+    def test_agent_perf_has_8_panels(self, agent_perf_dashboard):
+        assert len(agent_perf_dashboard["panels"]) == 8
 
-    def test_llm_rag_has_7_panels(self, llm_rag_dashboard):
-        assert len(llm_rag_dashboard["panels"]) == 7
+    def test_llm_rag_has_11_panels(self, llm_rag_dashboard):
+        assert len(llm_rag_dashboard["panels"]) == 11
 
 
 # ── Required panels per dashboard ─────────────────────────────────
@@ -293,6 +294,18 @@ class TestRequiredPanels:
         titles = self._get_panel_titles(agent_perf_dashboard)
         assert any("Stage Execution Counts" in t for t in titles)
 
+    def test_agent_perf_total_retries_panel(self, agent_perf_dashboard):
+        titles = self._get_panel_titles(agent_perf_dashboard)
+        assert any("Total Retries" in t for t in titles)
+
+    def test_agent_perf_retries_by_attempt_panel(self, agent_perf_dashboard):
+        titles = self._get_panel_titles(agent_perf_dashboard)
+        assert any("Retries by Attempt Count" in t for t in titles)
+
+    def test_agent_perf_dispatches_panel(self, agent_perf_dashboard):
+        titles = self._get_panel_titles(agent_perf_dashboard)
+        assert any("Scheduled vs User Dispatches" in t for t in titles)
+
     def test_llm_rag_provider_panel(self, llm_rag_dashboard):
         titles = self._get_panel_titles(llm_rag_dashboard)
         assert any("LLM Requests by Provider" in t for t in titles)
@@ -320,6 +333,22 @@ class TestRequiredPanels:
     def test_llm_rag_vector_error_rate_panel(self, llm_rag_dashboard):
         titles = self._get_panel_titles(llm_rag_dashboard)
         assert any("Vector Search Error Rate" in t for t in titles)
+
+    def test_llm_rag_embedding_batch_throughput_panel(self, llm_rag_dashboard):
+        titles = self._get_panel_titles(llm_rag_dashboard)
+        assert any("Embedding Batch Throughput" in t for t in titles)
+
+    def test_llm_rag_embedding_batch_latency_panel(self, llm_rag_dashboard):
+        titles = self._get_panel_titles(llm_rag_dashboard)
+        assert any("Embedding Batch Latency" in t for t in titles)
+
+    def test_llm_rag_vector_upsert_panel(self, llm_rag_dashboard):
+        titles = self._get_panel_titles(llm_rag_dashboard)
+        assert any("Vector Upsert Operations" in t for t in titles)
+
+    def test_llm_rag_vector_upsert_latency_panel(self, llm_rag_dashboard):
+        titles = self._get_panel_titles(llm_rag_dashboard)
+        assert any("Vector Upsert Latency" in t for t in titles)
 
 
 # ── Metric reference validation ───────────────────────────────────

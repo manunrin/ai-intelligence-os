@@ -23,6 +23,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..metrics import counter
 from .error_classifier import ErrorCategory, classify_error
 from .executor import Executor, PipelineFactory, RunResult
 
@@ -59,6 +60,11 @@ class RetryExecutor(Executor):
         self._max_attempts = max_attempts
         self._base_delay_ms = base_delay_ms
         self._max_delay_ms = max_delay_ms
+
+    def _record_retry(self, retries: int) -> None:
+        """Record a retry event with bounded label values."""
+        bucket = str(min(retries, 3))
+        counter("agent_run_retries_total", labels={"attempt": bucket})
 
     async def execute(
         self,
@@ -106,6 +112,8 @@ class RetryExecutor(Executor):
                     )
                     await asyncio.sleep(delay_ms / 1000.0)
                     actual_retries += 1
+                    # Record retry event (bounded label to prevent cardinality growth)
+                    self._record_retry(actual_retries)
                     continue
                 # Permanent error or last attempt — return with exception details.
                 return RunResult(
@@ -175,6 +183,8 @@ class RetryExecutor(Executor):
                 )
                 await asyncio.sleep(delay_ms / 1000.0)
                 actual_retries += 1
+                # Record retry event (bounded label to prevent cardinality growth)
+                self._record_retry(actual_retries)
             else:
                 # Exhausted all retries.
                 logger.warning(

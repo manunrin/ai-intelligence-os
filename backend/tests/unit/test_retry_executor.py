@@ -253,6 +253,84 @@ class TestRetryExecutorRaisedExceptions:
         assert inner.execute.call_count == 3
 
 
+class TestRetryExecutorMetrics:
+    """RetryExecutor records agent_run_retries_total counter."""
+
+    @pytest.mark.asyncio
+    async def test_counter_fires_on_retry(self):
+        """A retry increments the agent_run_retries_total counter."""
+        from backend.metrics import format_prometheus, reset
+
+        reset()
+        transient_fail = _make_run_result("failed", error_message="TimeoutError: timed out")
+        success = _make_run_result("completed")
+        inner = _make_mock_inner_executor([transient_fail, success])
+
+        executor = RetryExecutor(inner, max_attempts=3, base_delay_ms=1, max_delay_ms=10)
+        result = await executor.execute(
+            run_id=uuid.uuid4(),
+            factory=lambda: None,
+            state={},
+            user_id=uuid.uuid4(),
+            session=AsyncMock(),
+            cancellation_token={},
+        )
+
+        assert result.status == "completed"
+        assert result.retry_count == 1
+        output = format_prometheus()
+        assert 'agent_run_retries_total{attempt="1"} 1' in output
+
+    @pytest.mark.asyncio
+    async def test_counter_bounded_label_on_many_retries(self):
+        """Retry count >= 3 is bucketed as '3' to prevent cardinality growth."""
+        from backend.metrics import format_prometheus, reset
+
+        reset()
+        exc = TimeoutError("connection refused")
+        inner = _make_mock_inner_executor([exc, exc, exc])
+
+        executor = RetryExecutor(inner, max_attempts=3, base_delay_ms=1, max_delay_ms=10)
+        result = await executor.execute(
+            run_id=uuid.uuid4(),
+            factory=lambda: None,
+            state={},
+            user_id=uuid.uuid4(),
+            session=AsyncMock(),
+            cancellation_token={},
+        )
+
+        assert result.status == "failed"
+        assert result.retry_count == 2
+        output = format_prometheus()
+        # 2 retries fire counter twice: attempt=1 (first retry) and attempt=2 (second retry)
+        assert 'agent_run_retries_total{attempt="1"} 1' in output
+        assert 'agent_run_retries_total{attempt="2"} 1' in output
+
+    @pytest.mark.asyncio
+    async def test_no_counter_on_zero_retries(self):
+        """No retry counter when the first attempt succeeds."""
+        from backend.metrics import format_prometheus, reset
+
+        reset()
+        inner = _make_mock_inner_executor([_make_run_result("completed")])
+
+        executor = RetryExecutor(inner, max_attempts=3)
+        result = await executor.execute(
+            run_id=uuid.uuid4(),
+            factory=lambda: None,
+            state={},
+            user_id=uuid.uuid4(),
+            session=AsyncMock(),
+            cancellation_token={},
+        )
+
+        assert result.status == "completed"
+        assert result.retry_count == 0
+        output = format_prometheus()
+        assert "agent_run_retries_total" not in output
+
+
 class TestRetryExecutorNonFailStatuses:
     """Cancelled/timeout statuses should not trigger retries."""
 

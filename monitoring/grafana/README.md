@@ -115,6 +115,11 @@ Deep dive into agent pipeline execution.
 | Agent Success/Failure Distribution | `agent_runs_total` (by agent_type + status) | Grouped bar |
 | Agent Run Duration p50/p95 | `agent_run_duration_seconds_bucket` (histogram_quantile 0.50/0.95) | Bar chart |
 | Agent Stage Execution Counts | `agent_stages_total` (rate by stage_name) | Bar chart |
+| Total Retries (15m) | `agent_run_retries_total` (sum rate) | Stat |
+| Retries by Attempt Count | `agent_run_retries_total` (rate by attempt) | Bar chart |
+| Scheduled vs User Dispatches | `agent_runs_total{status="submitted"}` (rate by trigger) | Bar chart |
+
+**Time range**: Last 1 hour, refresh every 30 seconds.
 
 ### 3. LLM & RAG Performance (`llm-rag-performance`)
 
@@ -129,6 +134,10 @@ LLM provider health, fallback patterns, and vector search metrics.
 | Vector Search Throughput | `vector_search_total` (success vs failed rate) | Bar chart |
 | Vector Search Latency | `vector_search_duration_seconds_bucket` (p50/p95) | Bar chart |
 | Vector Search Error Rate | `vector_search_total{status="failed"}` / total | Gauge |
+| Embedding Batch Throughput | `embedding_batch_total` (rate by model) | Stacked bar |
+| Embedding Batch Latency p50/p95 | `embedding_batch_duration_seconds_bucket` (histogram_quantile 0.50/0.95) | Bar chart |
+| Vector Upsert Operations | `vector_operations_total` (rate by status) | Bar chart |
+| Vector Upsert Latency p50/p95 | `vector_operation_duration_seconds_bucket` (histogram_quantile 0.50/0.95) | Bar chart |
 
 ## Datasource Configuration
 
@@ -148,7 +157,7 @@ All panels reference metrics defined in `backend/metrics.py` and instrumented ac
 | Service | File | Metrics |
 |---------|------|---------|
 | HTTP middleware | `backend/routers/errors.py` | `http_requests_total`, `http_request_duration_seconds` |
-| Agent runtime | `backend/services/agent_runtime_service.py` | `agent_runs_total`, `agent_run_duration_seconds`, `agent_stages_total` |
+| Agent runtime | `backend/services/agent_runtime_service.py` | `agent_runs_total`, `agent_run_duration_seconds`, `agent_stages_total`, `agent_run_retries_total` |
 | LLM router | `backend/services/llm/router.py` | `llm_requests_total`, `llm_request_duration_seconds` |
 | Embedding client | `backend/services/embedding/client.py` | `embedding_requests_total`, `embedding_request_duration_seconds`, `embedding_batch_total`, `embedding_batch_items_total`, `embedding_batch_duration_seconds` |
 | Vector store | `backend/services/vector/qdrant.py` | `vector_search_total`, `vector_search_duration_seconds`, `vector_operations_total`, `vector_operation_duration_seconds` |

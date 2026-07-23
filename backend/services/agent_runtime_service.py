@@ -197,7 +197,8 @@ class AgentRuntimeService:
         await self._request_session.commit()
 
         # Record agent submission metric
-        counter("agent_runs_total", labels={"agent_type": agent_type, "status": "submitted"})
+        trigger = "cron" if scheduled_job_id else "user"
+        counter("agent_runs_total", labels={"agent_type": agent_type, "status": "submitted", "trigger": trigger})
 
         # Set agent run context for downstream log correlation
         _agent_ctx.set(str(run_id))
@@ -282,7 +283,8 @@ class AgentRuntimeService:
                 )
 
                 # Record agent run completion metric with stage info
-                counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": result.status})
+                trigger = "cron" if self._scheduled_job_id else "user"
+                counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": result.status, "trigger": trigger})
                 if result.duration_ms is not None:
                     histogram("agent_run_duration_seconds", result.duration_ms / 1000.0, labels={"agent_type": pipeline_type, "status": result.status})
 
@@ -308,7 +310,7 @@ class AgentRuntimeService:
                     ),
                     retry_count=0,
                 )
-                counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": "timeout"})
+                counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": "timeout", "trigger": "cron" if self._scheduled_job_id else "user"})
 
             except Exception as exc:
                 logger.exception("Unexpected error in run %s", str(run_id))
@@ -320,7 +322,7 @@ class AgentRuntimeService:
                     ),
                     retry_count=0,
                 )
-                counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": "error"})
+                counter("agent_runs_total", labels={"agent_type": pipeline_type, "status": "error", "trigger": "cron" if self._scheduled_job_id else "user"})
 
             finally:
                 self._cancellation_tokens.pop(run_id, None)
