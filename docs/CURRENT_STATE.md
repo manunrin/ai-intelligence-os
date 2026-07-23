@@ -354,6 +354,52 @@ Full notification delivery implementation replacing log-only stubs:
 
 ---
 
+## Phase 10.2.2-C — Scheduler API + Persistence (COMPLETE — 2026-07-23)
+
+PostgreSQL-backed job scheduling with CRUD API and frontend management UI:
+
+**Database model:**
+- `ScheduledJob` table (`scheduled_jobs`) with fields: `name` (unique), `cron_expression`, `job_type` (intelligence|autonomous), `enabled`, `input_payload` (JSONB), `last_run_id` (links to agent_runs), `last_run_at`, `last_run_status`, `last_run_duration_ms`
+- Migration 0009 adds the table
+
+**Scheduler service:**
+- `SchedulerService` in `backend/services/scheduler/service.py` — full CRUD, APScheduler lifecycle, job dispatch
+- Uses `AsyncIOScheduler` (runs in same event loop as FastAPI) — no separate threads or event loops
+- On startup, restores enabled jobs from DB and registers each with APScheduler
+- Job triggers call `AgentRuntimeService.submit()` — same checkpointing, retry, cancellation paths as user-submitted runs
+- Records `last_run_id` linking to the created `agent_runs` record; status set to `"submitted"` immediately (no polling for completion)
+
+**API endpoints:**
+- `GET /api/v1/scheduler/jobs` — list all jobs
+- `POST /api/v1/scheduler/jobs` — create schedule (rate limited 20/hour)
+- `PUT /api/v1/scheduler/jobs/{id}` — update (partial fields supported, rate limited 20/hour)
+- `DELETE /api/v1/scheduler/jobs/{id}` — remove schedule (rate limited 20/hour)
+- `POST /api/v1/scheduler/jobs/{id}/trigger` — manual trigger (rate limited 10/hour)
+- Cron validation via `croniter`; job_type validated against PIPELINE_REGISTRY; name uniqueness enforced
+
+**Frontend:**
+- Standalone `/scheduler` page with auth guard
+- `SchedulerPanel` component: card-based job list with inline toggle switch, edit modal, trigger/delete actions
+- `formatCronExpression()` helper converts cron expressions to human-readable English
+- Full React Query hooks: `useSchedulerJobs`, `useCreateScheduledJob`, `useUpdateScheduledJob`, `useDeleteScheduledJob`, `useTriggerScheduledJob`
+
+**Configuration:**
+- `SCHEDULER_ENABLED=true` env var to enable/disable entirely
+- `apscheduler>=3.10.0,<4.0.0` pinned dependency
+- `croniter>=2.0.0` added for validation and next-run calculation
+
+**Test coverage:**
+- 22 unit tests across CRUD, validation, restore, dispatch, serialization
+- 3 integration tests covering API response envelopes
+- Full suite: **81 backend tests pass**, **95 frontend tests pass** — zero regressions
+
+**Known limitations:**
+- Completion status updates deferred — `last_run_status` is recorded as `"submitted"` at dispatch time; actual completion/failed status requires a future event callback mechanism
+- No execution history table — only the most recent run tracked per job
+- `last_run_id` is a UUID reference (not a FK constraint) to avoid circular dependency on `agent_runs` table
+
+---
+
 ## Completed Milestones
 
 ### Infrastructure & Foundation (Phases 1–2)
@@ -443,5 +489,5 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 - Add Prometheus/Grafana dashboards for agent runtime metrics.
 - Implement resume validation to ensure checkpoint pipeline type matches original submission.
 - **Phase 10.2.2-B: Notification Channels** — COMPLETE. SMTP (aiosmtplib), Telegram (Bot API), and Slack (incoming webhook) channels. Config-driven enable/disable via env vars. Per-channel delivery status tracking. Graceful degradation — one channel failure doesn't block others.
-- Consider Phase 10.2.2-C: Scheduler API + Persistence.
+- **Phase 10.2.2-C: Scheduler API + Persistence** — COMPLETE. PostgreSQL-backed `scheduled_jobs` table with CRUD endpoints at `/api/v1/scheduler/jobs`. APScheduler `AsyncIOScheduler` (in-memory trigger only) restores enabled jobs from DB on startup. All scheduled execution goes through `AgentRuntimeService.submit()` — same checkpointing, retry, cancellation paths as user-submitted runs. Frontend has a standalone `/scheduler` page with list/toggle/edit/trigger/delete UI.
 - Consider Phase 10.2.2-D: Refresh Tokens.
