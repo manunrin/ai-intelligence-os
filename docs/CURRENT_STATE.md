@@ -1,8 +1,8 @@
 # AI Intelligence OS — Current State
 
-**Last Updated:** 2026-07-22
+**Last Updated:** 2026-07-23
 **Version:** 0.1.0 Beta
-**Branch:** master (HEAD: `3544d85`)
+**Branch:** master (HEAD: `052b10f`)
 
 ---
 
@@ -138,7 +138,7 @@ Frontend authentication flow wired end-to-end to existing backend auth APIs:
 - ✅ **Protected route redirect** — Middleware blocks access without cookie; client-side guards redirect before render
 - ✅ **Auth tests** — 16 tests pass (`auth-storage.test.ts`: 7, `api.test.ts`: 9)
 
-**Known limitation:** No refresh tokens — only access tokens (HS256). Refresh token endpoint deferred.
+**Known limitation:** Access tokens are not silently refreshed on expiry — a 401 currently triggers a full logout flow. Frontend silent refresh interceptor deferred.
 
 ---
 
@@ -400,6 +400,52 @@ PostgreSQL-backed job scheduling with CRUD API and frontend management UI:
 
 ---
 
+## Phase 10.2.2-D — Refresh Tokens (COMPLETE — 2026-07-23)
+
+Secure token rotation with Redis-backed opaque refresh tokens:
+
+**Authentication architecture:**
+- **Access tokens** — Short-lived (30-minute) HS256 JWTs containing `sub` (user UUID) and `exp`. Verified server-side via `python-jose`; no DB lookup required.
+- **Refresh tokens** — Opaque 64-char hex strings (256 bits of entropy from `secrets.token_hex(32)`), stored as SHA-256 hashes in Redis. Plaintext never appears in storage; lookup is O(1) by hash.
+- **Cookie delivery** — `aio_refresh_token` cookie set with `HttpOnly=True`, `Secure=settings.cookie_secure`, `SameSite=lax`, 7-day max-age. Access tokens returned in JSON response body only (never in cookies).
+- **Token rotation** — One-use rotation on every `/auth/refresh`: old refresh token revoked, new refresh token issued and stored. Prevents replay attacks from token theft.
+- **Logout** — `POST /auth/logout` revokes the current refresh token in Redis and clears the cookie. Access tokens expire naturally at their TTL.
+
+**Backend implementation:**
+- `backend/services/refresh_token_store.py` — `RefreshTokenStore` class with `store()`, `validate()`, `revoke()`, `revoke_all_user_tokens()`, `rotate()` methods. Keys prefixed `rt:{sha256_hash}`, values are JSON with `user_id`, `created_at`, `exp_epoch`. TTL auto-cleans expired entries.
+- `backend/utils/jwt.py` — `create_refresh_token()` returns `(token_string, expires_at)` tuple.
+- `backend/routers/auth.py` — Login sets refresh cookie + returns access token; `/refresh` validates and rotates; `/logout` revokes and clears.
+- `backend/routers/deps.py` — `get_redis_client()` dependency yields `RefreshTokenStore` from `app.state`.
+- `backend/config.py` — New settings: `jwt_refresh_token_expire_days` (default 7), `cookie_secure`, `cookie_samesite`, `cookie_domain`.
+- `backend/main.py` — Initializes `RefreshTokenStore.from_url(settings.redis_url)` during startup lifespan.
+
+**API endpoints:**
+- `POST /api/v1/auth/login` — Returns `{access_token, token_type}` in JSON body; sets `aio_refresh_token` HttpOnly cookie.
+- `POST /api/v1/auth/refresh` — Exchanges valid refresh token for new access token + rotated refresh token cookie. Supports one-use rotation.
+- `POST /api/v1/auth/logout` — Revokes refresh token in Redis, clears cookie.
+
+**Frontend:**
+- Auth context (`frontend/lib/auth-context.tsx`) provides `login()`, `logout()`, `refreshUser()` — re-fetches `/me` to sync user state.
+- API client (`frontend/lib/api.ts`) attaches Bearer token from auth context; clears token on 401 responses.
+- Middleware (`frontend/middleware.ts`) enforces auth cookie on protected routes; redirects to `/login?callbackUrl=<path>`.
+
+**Test coverage:**
+- 16 unit tests across 2 test files — all passing.
+- `test_refresh_jwt.py` (5 tests): token format, uniqueness, expiry calculation, custom duration.
+- `test_refresh_token_store.py` (11 tests): hash determinism, store with TTL, validate existing/missing/expired, revoke, rotate, factory method.
+
+**Known limitations:**
+- Frontend does not yet implement automatic silent refresh on access token expiry — a 401 currently triggers a full logout flow. A background refresh interval or `fetch` interceptor that calls `/auth/refresh` before retrying is deferred.
+- No `revoke_all_user_tokens()` call on password change or account deletion — orphaned refresh tokens remain in Redis until they naturally expire.
+
+**Final commit:**
+
+| Commit | Message |
+|--------|---------|
+| `052b10f` | feat: implement refresh token authentication |
+
+---
+
 ## Completed Milestones
 
 ### Infrastructure & Foundation (Phases 1–2)
@@ -423,8 +469,7 @@ PostgreSQL-backed job scheduling with CRUD API and frontend management UI:
 - Layered architecture: Router → Service → Repository → Model → Schema → Config
 - 5 read endpoints with pagination, Pydantic v2 schemas, APIResponse envelope
 - Full CRUD (POST/PUT/DELETE) for articles, tasks, knowledge items; POST/GET for reports
-- Authentication: User model, bcrypt passwords, JWT access tokens (HS256), register/login/me endpoints
-- All write endpoints protected behind `get_current_user` dependency
+- Authentication: User model, bcrypt passwords, short-lived HS256 JWT access tokens (30 min), opaque SHA-256-hashed refresh tokens stored in Redis with one-use rotation, HttpOnly/SameSite cookie delivery, `/auth/refresh` and `/auth/logout` endpoints. All write endpoints protected behind `get_current_user` dependency.
 
 ### Observability (Phase 7 partial)
 - OpenTelemetry distributed tracing across all layers
@@ -443,25 +488,25 @@ PostgreSQL-backed job scheduling with CRUD API and frontend management UI:
 
 | Commit | Message |
 |--------|---------|
-| `a345d29` | feat(frontend): add knowledge RAG chat interface |
-| `c9dae14` | fix(frontend): polish command center interactions |
-| `d0d4633` | fix(frontend): polish phase 9 visual consistency issues |
-| `90715fe` | fix(frontend): load global styles in app layout |
-| `b2c28c7` | fix(frontend): remove stale props from AgentsPanel |
-| `62dbea5` | feat(frontend): polish sidebar, dashboard, toasts, slide-over detail views |
-| `00137e0` | feat(frontend): workspace pages — rich cards replace flat tables |
-| `c6e85fe` | feat(frontend): agent execution visualization |
-| `d9f63db` | feat(frontend): add EmptyState component |
-| `fae09e3` | feat(frontend): upgrade button system with press feedback |
+| `052b10f` | feat: implement refresh token authentication |
+| `52077eb` | docs: record Phase 10.2.2-C scheduler completion |
+| `b1bd25e` | feat: implement scheduler API and persistence |
+| `3e32824` | docs: record Phase 10.2.2-B notification channels completion in CURRENT_STATE.md |
+| `8c4d440` | feat: implement notification channels |
+| `eca774f` | docs: record Phase 10.2.2-A executor retry mechanism in CURRENT_STATE.md |
+| `23e44c2` | feat: add executor retry mechanism |
+| `9eeb012` | docs: finalize phase 10.2.1 documentation with E2E results and bug fix details |
+| `b08cbd8` | fix: resolve event loop conflict in SyncExecutor for checkpointer compatibility |
+| `1f1dd51` | docs: mark phase 10.2.1 resume for interrupted agent runs complete |
 
-All recent activity has been frontend-focused. Backend services (vector search, RAG, knowledge extraction) were implemented earlier; the Knowledge workspace now has full Browse + Ask AI tabs with chat-style RAG over the knowledge base. Hybrid search backend also completed.
+All recent activity has been backend-focused: runtime persistence, resume, retry, notifications, scheduler, and refresh tokens. Frontend auth flow was completed in Phase 9.6 Priority 2 (middleware enforcement, login/register pages, auth context).
 
 ---
 
 ## Known Issues
 
-1. **No refresh tokens** — Only access tokens (HS256). Refresh token endpoint deferred.
-2. **No frontend auth UI** — Login forms, token storage, auto-attach headers not yet wired to backend auth.
+1. **No frontend silent refresh** — Backend supports `/auth/refresh` with one-use rotation, but the frontend does not automatically call it on access token expiry. A 401 currently triggers a full logout flow. A `fetch` interceptor that retries on 401 via `/auth/refresh` is deferred.
+2. **No refresh token bulk revoke on user events** — `revoke_all_user_tokens()` exists in `RefreshTokenStore` but is not called on password change or account deletion. Orphaned refresh tokens remain in Redis until they naturally expire.
 3. **Pagination UI missing** — Backend supports offset/limit but frontend has no pagination controls.
 4. **Report PUT/DELETE not implemented** — Out of scope for Phase 6-D.1.
 5. **Agent run creates record only** — Workflow execution triggered but not wired to LangGraph runner. *(Phase 10.1: thread_id generation, checkpointer wiring, migration, recovery scan, resume API, and frontend updates all completed. End-to-end live pipeline test still pending.)*
@@ -490,4 +535,4 @@ All recent activity has been frontend-focused. Backend services (vector search, 
 - Implement resume validation to ensure checkpoint pipeline type matches original submission.
 - **Phase 10.2.2-B: Notification Channels** — COMPLETE. SMTP (aiosmtplib), Telegram (Bot API), and Slack (incoming webhook) channels. Config-driven enable/disable via env vars. Per-channel delivery status tracking. Graceful degradation — one channel failure doesn't block others.
 - **Phase 10.2.2-C: Scheduler API + Persistence** — COMPLETE. PostgreSQL-backed `scheduled_jobs` table with CRUD endpoints at `/api/v1/scheduler/jobs`. APScheduler `AsyncIOScheduler` (in-memory trigger only) restores enabled jobs from DB on startup. All scheduled execution goes through `AgentRuntimeService.submit()` — same checkpointing, retry, cancellation paths as user-submitted runs. Frontend has a standalone `/scheduler` page with list/toggle/edit/trigger/delete UI.
-- Consider Phase 10.2.2-D: Refresh Tokens.
+- **Phase 10.2.2-D: Refresh Tokens** — COMPLETE. Redis-backed opaque refresh tokens with SHA-256 hashing, one-use rotation, HttpOnly cookie delivery. `/auth/refresh` and `/auth/logout` endpoints. 16 unit tests passing.
