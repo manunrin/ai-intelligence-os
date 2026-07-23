@@ -2,7 +2,7 @@
 
 **Last Updated:** 2026-07-23
 **Version:** 0.1.0 Beta
-**Branch:** master (HEAD: `052b10f`)
+**Branch:** master (HEAD: `91b46a8`)
 
 ---
 
@@ -129,7 +129,7 @@ Frontend authentication flow wired end-to-end to existing backend auth APIs:
 - **Register page** — `frontend/app/register/page.tsx` calls `POST /api/v1/auth/register`, auto-logs in, redirects to dashboard
 - **Auth context** — `frontend/lib/auth-context.tsx` sets/clears `aio_auth_token` cookie on login/logout for middleware enforcement; also maintains localStorage + React state
 - **Client-side guards** — Dashboard, Knowledge, and Agents pages use `useAuth()` to redirect unauthenticated users before rendering protected content
-- **API client** — Existing `frontend/lib/api.ts` auto-attaches Bearer token and handles 401 by clearing auth state
+- **API client** — Existing `frontend/lib/api.ts` auto-attaches Bearer token and retries on 401 via silent refresh; clears auth only when refresh fails.
 - **Tests** — 16 tests passing across `auth-storage.test.ts` and `api.test.ts`
 
 **Verification Results:**
@@ -138,7 +138,7 @@ Frontend authentication flow wired end-to-end to existing backend auth APIs:
 - ✅ **Protected route redirect** — Middleware blocks access without cookie; client-side guards redirect before render
 - ✅ **Auth tests** — 16 tests pass (`auth-storage.test.ts`: 7, `api.test.ts`: 9)
 
-**Known limitation:** Access tokens are not silently refreshed on expiry — a 401 currently triggers a full logout flow. Frontend silent refresh interceptor deferred.
+**Known limitation:** None. Silent refresh is implemented in Phase 10.2.2-E.
 
 ---
 
@@ -426,7 +426,7 @@ Secure token rotation with Redis-backed opaque refresh tokens:
 
 **Frontend:**
 - Auth context (`frontend/lib/auth-context.tsx`) provides `login()`, `logout()`, `refreshUser()` — re-fetches `/me` to sync user state.
-- API client (`frontend/lib/api.ts`) attaches Bearer token from auth context; clears token on 401 responses.
+- API client (`frontend/lib/api.ts`) attaches Bearer token from auth context; retries on 401 via silent refresh; clears token only when refresh fails.
 - Middleware (`frontend/middleware.ts`) enforces auth cookie on protected routes; redirects to `/login?callbackUrl=<path>`.
 
 **Test coverage:**
@@ -435,7 +435,6 @@ Secure token rotation with Redis-backed opaque refresh tokens:
 - `test_refresh_token_store.py` (11 tests): hash determinism, store with TTL, validate existing/missing/expired, revoke, rotate, factory method.
 
 **Known limitations:**
-- Frontend does not yet implement automatic silent refresh on access token expiry — a 401 currently triggers a full logout flow. A background refresh interval or `fetch` interceptor that calls `/auth/refresh` before retrying is deferred.
 - No `revoke_all_user_tokens()` call on password change or account deletion — orphaned refresh tokens remain in Redis until they naturally expire.
 
 **Final commit:**
@@ -477,7 +476,7 @@ Automatic access token refresh on expiry — no full logout flow on 401:
 
 | Commit | Message |
 |--------|---------|
-| `<hash>` | feat: add frontend silent token refresh interceptor (Phase 10.2.2-E) |
+| `b641fd5` | feat: add frontend silent token refresh interceptor (Phase 10.2.2-E) |
 
 ---
 
@@ -523,16 +522,16 @@ Automatic access token refresh on expiry — no full logout flow on 401:
 
 | Commit | Message |
 |--------|---------|
+| `91b46a8` | docs: fix Known Issues numbering in CURRENT_STATE.md |
+| `8a6d648` | docs: record Phase 10.2.2-E silent token refresh completion in CURRENT_STATE.md |
+| `b641fd5` | feat: add frontend silent token refresh interceptor (Phase 10.2.2-E) |
 | `052b10f` | feat: implement refresh token authentication |
-| `4e7c8a2` | feat: add frontend silent token refresh interceptor (Phase 10.2.2-E) |
 | `52077eb` | docs: record Phase 10.2.2-C scheduler completion |
 | `b1bd25e` | feat: implement scheduler API and persistence |
 | `3e32824` | docs: record Phase 10.2.2-B notification channels completion in CURRENT_STATE.md |
 | `8c4d440` | feat: implement notification channels |
 | `eca774f` | docs: record Phase 10.2.2-A executor retry mechanism in CURRENT_STATE.md |
 | `23e44c2` | feat: add executor retry mechanism |
-| `9eeb012` | docs: finalize phase 10.2.1 documentation with E2E results and bug fix details |
-| `b08cbd8` | fix: resolve event loop conflict in SyncExecutor for checkpointer compatibility |
 
 All recent activity has been backend-focused: runtime persistence, resume, retry, notifications, scheduler, and refresh tokens. Frontend auth flow was completed in Phase 9.6 Priority 2 (middleware enforcement, login/register pages, auth context). Silent token refresh added in Phase 10.2.2-E.
 
