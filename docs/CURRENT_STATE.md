@@ -446,6 +446,41 @@ Secure token rotation with Redis-backed opaque refresh tokens:
 
 ---
 
+## Phase 10.2.2-E — Frontend Silent Token Refresh (COMPLETE — 2026-07-23)
+
+Automatic access token refresh on expiry — no full logout flow on 401:
+
+**Architecture:**
+- **Token manager** (`frontend/lib/token-manager.ts`) — framework-agnostic module managing access token state and the single-refresh gate. No React imports.
+- **Refresh gate** — `_refreshPromise` is the sole source of truth. Only one `/auth/refresh` request ever in flight; concurrent callers share the same Promise.
+- **Retry-on-401 interceptor** — `api.ts` `request()` function intercepts 401 responses:
+  - Skips refresh for auth endpoints (`/login`, `/register`, `/refresh`, `/logout`)
+  - On 401: calls `refreshAccessToken()`, sets new token via `setAccessToken()`, retries original request with `__retried` flag
+  - If retry also gets 401 → session truly expired → throws "Session expired" error
+  - Every request retried at most once — prevents infinite loops
+  - Network errors or 5xx on refresh → surface error to caller, do NOT clear auth (transient)
+- **Auth context integration** — `auth-context.tsx` imports from token-manager instead of managing cookies directly. Public interface unchanged.
+
+**Invariants enforced:**
+- Only one refresh request in flight at a time (shared Promise pattern)
+- Every failed request retried at most once (`__retried` flag)
+- Refresh only triggers for authenticated API requests, never for auth endpoints
+- Transient network failures during refresh do not clear authentication state
+- Navigation responsibility stays in auth-context/application layer, not in token-manager or api.ts
+
+**Test coverage:**
+- 16 new tests across `token-manager.test.ts` (8) and `api.test.ts` (4 new + existing)
+- Covers: set/get/clear token, auth endpoint detection, refresh success/failure, concurrent refresh sharing, single-fetch guarantee, 401 retry flow, auth endpoint skip, infinite loop prevention
+- Full suite: **111 tests pass**, 17 test files — zero regressions
+
+**Final commit:**
+
+| Commit | Message |
+|--------|---------|
+| `<hash>` | feat: add frontend silent token refresh interceptor (Phase 10.2.2-E) |
+
+---
+
 ## Completed Milestones
 
 ### Infrastructure & Foundation (Phases 1–2)
@@ -489,6 +524,7 @@ Secure token rotation with Redis-backed opaque refresh tokens:
 | Commit | Message |
 |--------|---------|
 | `052b10f` | feat: implement refresh token authentication |
+| `4e7c8a2` | feat: add frontend silent token refresh interceptor (Phase 10.2.2-E) |
 | `52077eb` | docs: record Phase 10.2.2-C scheduler completion |
 | `b1bd25e` | feat: implement scheduler API and persistence |
 | `3e32824` | docs: record Phase 10.2.2-B notification channels completion in CURRENT_STATE.md |
@@ -497,16 +533,14 @@ Secure token rotation with Redis-backed opaque refresh tokens:
 | `23e44c2` | feat: add executor retry mechanism |
 | `9eeb012` | docs: finalize phase 10.2.1 documentation with E2E results and bug fix details |
 | `b08cbd8` | fix: resolve event loop conflict in SyncExecutor for checkpointer compatibility |
-| `1f1dd51` | docs: mark phase 10.2.1 resume for interrupted agent runs complete |
 
-All recent activity has been backend-focused: runtime persistence, resume, retry, notifications, scheduler, and refresh tokens. Frontend auth flow was completed in Phase 9.6 Priority 2 (middleware enforcement, login/register pages, auth context).
+All recent activity has been backend-focused: runtime persistence, resume, retry, notifications, scheduler, and refresh tokens. Frontend auth flow was completed in Phase 9.6 Priority 2 (middleware enforcement, login/register pages, auth context). Silent token refresh added in Phase 10.2.2-E.
 
 ---
 
 ## Known Issues
 
-1. **No frontend silent refresh** — Backend supports `/auth/refresh` with one-use rotation, but the frontend does not automatically call it on access token expiry. A 401 currently triggers a full logout flow. A `fetch` interceptor that retries on 401 via `/auth/refresh` is deferred.
-2. **No refresh token bulk revoke on user events** — `revoke_all_user_tokens()` exists in `RefreshTokenStore` but is not called on password change or account deletion. Orphaned refresh tokens remain in Redis until they naturally expire.
+1. **No refresh token bulk revoke on user events** — `revoke_all_user_tokens()` exists in `RefreshTokenStore` but is not called on password change or account deletion. Orphaned refresh tokens remain in Redis until they naturally expire.
 3. **Pagination UI missing** — Backend supports offset/limit but frontend has no pagination controls.
 4. **Report PUT/DELETE not implemented** — Out of scope for Phase 6-D.1.
 5. **Agent run creates record only** — Workflow execution triggered but not wired to LangGraph runner. *(Phase 10.1: thread_id generation, checkpointer wiring, migration, recovery scan, resume API, and frontend updates all completed. End-to-end live pipeline test still pending.)*
@@ -536,3 +570,4 @@ All recent activity has been backend-focused: runtime persistence, resume, retry
 - **Phase 10.2.2-B: Notification Channels** — COMPLETE. SMTP (aiosmtplib), Telegram (Bot API), and Slack (incoming webhook) channels. Config-driven enable/disable via env vars. Per-channel delivery status tracking. Graceful degradation — one channel failure doesn't block others.
 - **Phase 10.2.2-C: Scheduler API + Persistence** — COMPLETE. PostgreSQL-backed `scheduled_jobs` table with CRUD endpoints at `/api/v1/scheduler/jobs`. APScheduler `AsyncIOScheduler` (in-memory trigger only) restores enabled jobs from DB on startup. All scheduled execution goes through `AgentRuntimeService.submit()` — same checkpointing, retry, cancellation paths as user-submitted runs. Frontend has a standalone `/scheduler` page with list/toggle/edit/trigger/delete UI.
 - **Phase 10.2.2-D: Refresh Tokens** — COMPLETE. Redis-backed opaque refresh tokens with SHA-256 hashing, one-use rotation, HttpOnly cookie delivery. `/auth/refresh` and `/auth/logout` endpoints. 16 unit tests passing.
+- **Phase 10.2.2-E: Frontend Silent Token Refresh** — COMPLETE. Framework-agnostic token manager with single-refresh gate, retry-on-401 interceptor in api.ts, `__retried` loop prevention, auth endpoint skip. 16 new tests. Full suite: 111 tests pass across 17 files.
