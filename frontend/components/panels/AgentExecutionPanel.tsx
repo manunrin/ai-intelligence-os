@@ -31,6 +31,17 @@ const STATUS_VARIANTS: Record<string, "default" | "success" | "warning" | "dange
   recovered: "warning",
 };
 
+function getQualityVariant(score: number): "success" | "warning" | "danger" {
+  if (score >= 0.7) return "success";
+  if (score >= 0.4) return "warning";
+  return "danger";
+}
+
+function formatScore(score: number | null | undefined): string {
+  if (score == null) return "—";
+  return `${Math.round(score * 100)}%`;
+}
+
 const STAGE_ORDER = [
   "ingest",
   "research",
@@ -279,6 +290,8 @@ function RunHistoryCard({ run, onViewDetails }: { run: AgentRun; onViewDetails: 
   const variant = STATUS_VARIANTS[run.status] || "default";
   const isTerminal = run.status === "completed" || run.status === "failed" || run.status === "cancelled";
   const isFailed = run.status === "failed";
+  const score = (run as any).evaluation_score as number | null | undefined;
+  const hasQuality = score != null && isTerminal;
 
   return (
     <div className="group rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-150 ease-out hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
@@ -289,6 +302,11 @@ function RunHistoryCard({ run, onViewDetails }: { run: AgentRun; onViewDetails: 
               {run.agent_id}
             </span>
             <Badge variant={variant}>{run.status}</Badge>
+            {hasQuality && (
+              <Badge variant={getQualityVariant(score)}>
+                {formatScore(score)}
+              </Badge>
+            )}
           </div>
           <div className="mt-1 flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
             <span className="tabular-nums">{formatDuration(run.duration_ms)}</span>
@@ -366,6 +384,10 @@ function RunDetailsSheet({
 }) {
   if (!run) return null;
 
+  const score = (run as any).evaluation_score as number | null | undefined;
+  const criteria = (run as any).evaluation_criteria as Record<string, number> | null | undefined;
+  const hasEvaluation = score != null && criteria != null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-end" role="dialog">
       {/* Backdrop */}
@@ -416,6 +438,30 @@ function RunDetailsSheet({
               <dd className="mt-1 text-sm">{run.finished_at ? new Date(run.finished_at).toLocaleString() : "—"}</dd>
             </div>
           </div>
+
+          {/* Evaluation */}
+          {hasEvaluation && (
+            <div>
+              <dt className="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Quality Evaluation</dt>
+              <div className="mt-2 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge variant={getQualityVariant(score)} className="text-sm px-3 py-1">
+                    {formatScore(score)}
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  {Object.entries(criteria).map(([key, val]) => (
+                    <div key={key} className="flex items-center justify-between rounded-md bg-slate-50 px-2 py-1.5 text-xs dark:bg-slate-800">
+                      <span className="text-slate-500 dark:text-slate-400 capitalize">{key}</span>
+                      <span className="font-medium tabular-nums text-slate-700 dark:text-slate-300">
+                        {Math.round((val as number) * 100)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Error */}
           {run.error_message && (

@@ -22,6 +22,8 @@ class AgentRunResponse(BaseModel):
     finished_at: datetime | None = None
     duration_ms: int | None = None
     user_id: str | None = None
+    evaluation_score: float | None = None
+    evaluation_criteria: dict[str, float] | None = None
 
     model_config = {"from_attributes": True}
 

@@ -109,6 +109,19 @@ async def lifespan(app: FastAPI):
     app.state.embedding_client = embedding_client
     app.state.vector_service = vector_service
 
+    # ── Agent Evaluation Service ───────────────────────────────────────
+    evaluation_service = None
+    settings = get_settings()
+    if settings.evaluation_enabled:
+        try:
+            from .services.evaluation.service import EvaluationService
+            from .services.llm.client import LLMClient
+            evaluation_service = EvaluationService(llm_client=LLMClient(llm_router))
+            app.state.evaluation_service = evaluation_service
+            logger.info("EvaluationService initialized")
+        except Exception:
+            logger.warning("EvaluationService initialization failed — evaluations will be skipped", exc_info=True)
+
     logger.info("Backend startup complete — MCP servers: %s", list(_bootstrap.mcp_registry.list_servers().keys()))
 
     # ── Scheduler service ──────────────────────────────────────────────

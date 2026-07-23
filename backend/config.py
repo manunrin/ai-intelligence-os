@@ -87,6 +87,10 @@ class Settings(BaseSettings):
     # -- Scheduler --
     scheduler_enabled: bool = True
 
+    # -- Agent Evaluation --
+    evaluation_enabled: bool = True
+    evaluation_score_threshold: float = 0.5
+
     # -- CORS --
     cors_allowed_origins: str = ""
 

@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ..repositories.agent_run_repository import AgentRunRepository
 from ..repositories.agent_stage_progress_repository import AgentStageProgressRepository
+from ..services.evaluation.repository import AgentEvaluationRepository
 from ..workflows.executor import Executor, PipelineFactory, RunResult, SyncExecutor
 from ..workflows.retry_executor import RetryExecutor
 from ..workflows.registry import PIPELINE_REGISTRY
@@ -75,6 +76,12 @@ def _make_repo(session: AsyncSession):
     return AgentRunRepository(session), AgentStageProgressRepository(session)
 
 
+def _make_all_repos(session: AsyncSession):
+    """Create all repos (including evaluation) bound to a session."""
+    ar, sp = _make_repo(session)
+    return ar, sp, AgentEvaluationRepository(session)
+
+
 class AgentRuntimeService:
     """Orchestrates agent run execution, lifecycle, and observability.
 
@@ -90,6 +97,7 @@ class AgentRuntimeService:
         *,
         session_factory: Callable[[], AsyncSession] | None = None,
         checkpointer: Any = None,
+        evaluation_service: Any = None,  # EvaluationService — injected at runtime
     ) -> None:
         if isinstance(session_or_factory, async_sessionmaker):
             # sessionmaker — use it for both request and bg tasks
@@ -121,6 +129,7 @@ class AgentRuntimeService:
         self._run_tasks: dict[uuid.UUID, asyncio.Task | None] = {}
         self._checkpointer: Any = checkpointer
         self._scheduled_job_id: str | None = None
+        self._evaluation_service = evaluation_service
 
     async def list_agent_runs(self, user_id: uuid.UUID, *, offset: int = 0, limit: int = 20) -> list[dict[str, Any]]:
         """Return paginated agent runs for the given user."""
@@ -136,7 +145,22 @@ class AgentRuntimeService:
         )
         result = await self._request_session.execute(stmt)
         runs = result.scalars().all()
-        return [_run_to_dict(r) for r in runs]
+
+        # Batch-fetch evaluation scores for these runs
+        run_ids = [r.id for r in runs]
+        eval_map: dict[uuid.UUID, float | None] = {}
+        if run_ids:
+            eval_repo = AgentEvaluationRepository(self._request_session)
+            evaluations = await eval_repo.get_by_run_ids(run_ids)
+            for ev in evaluations:
+                eval_map[ev.agent_run_id] = ev.score
+
+        output = []
+        for r in runs:
+            d = _run_to_dict(r)
+            d["evaluation_score"] = eval_map.get(r.id)
+            output.append(d)
+        return output
 
     async def submit(
         self,
@@ -291,7 +315,19 @@ class AgentRuntimeService:
                 if result.status == "cancelled":
                     await self._finalize_cancelled(repo, run_id, result)
                 elif result.status == "completed":
-                    await self._finalize_completed(repo, stage_repo, run_id, result, callback.events)
+                    eval_result = None
+                    eval_repo = AgentEvaluationRepository(session)
+                    if (result.output_payload
+                            and self._evaluation_service is not None):
+                        eval_result = await self._evaluate_output(
+                            pipeline_type, result.output_payload, state,
+                        )
+                    if eval_result is not None:
+                        await self._persist_evaluation(session, run_id, eval_result, pipeline_type)
+                        await session.commit()
+                    await self._finalize_completed(
+                        repo, stage_repo, run_id, result, callback.events,
+                    )
                 elif result.status == "failed":
                     await self._finalize_failed(
                         repo, run_id, result, retry_count=result.retry_count,
@@ -329,6 +365,65 @@ class AgentRuntimeService:
                 self._run_tasks.pop(run_id, None)
                 _agent_ctx.set(None)
                 await session.close()
+
+    async def _evaluate_output(
+        self,
+        pipeline_type: str,
+        output_payload: dict[str, Any],
+        input_payload: dict[str, Any],
+    ) -> Any | None:
+        """Run LLM-based quality evaluation on a completed run's output.
+
+        Returns EvaluationResponse or None on any failure.
+        """
+        if self._evaluation_service is None:
+            logger.debug("EvaluationService not configured — skipping evaluation")
+            return None
+        try:
+            return await self._evaluation_service.evaluate(
+                pipeline_type=pipeline_type,
+                output_payload=output_payload,
+                input_payload=input_payload,
+            )
+        except Exception:
+            logger.warning(
+                "Evaluation failed for run %s pipeline %s",
+                str(getattr(self, '_current_run_id', 'unknown')),
+                pipeline_type,
+                exc_info=True,
+            )
+            return None
+
+    async def _persist_evaluation(
+        self,
+        session: AsyncSession,
+        run_id: uuid.UUID,
+        evaluation_result: Any,
+        pipeline_type: str,
+    ) -> None:
+        """Persist an evaluation result to the agent_evaluations table."""
+        from ..database.models import AgentEvaluation
+
+        score = None
+        criteria = None
+        if hasattr(evaluation_result, "score"):
+            score = evaluation_result.score
+        if hasattr(evaluation_result, "criteria"):
+            criteria = evaluation_result.criteria
+
+        instance = AgentEvaluation(
+            agent_run_id=run_id,
+            pipeline_type=pipeline_type,
+            score=float(score) if score is not None else None,
+            criteria=criteria or {},
+        )
+        session.add(instance)
+        await session.flush()
+        logger.info(
+            "Evaluation persisted for run %s (score=%s)",
+            str(run_id),
+            score,
+        )
 
     async def _finalize_completed(
         self,
@@ -498,6 +593,17 @@ class AgentRuntimeService:
         result = _run_to_dict(run)
         result["stages"] = stage_dicts
         result["stream_url"] = f"/api/v1/agents/runs/{run_id}/stream"
+
+        # Include evaluation data if available
+        eval_repo = AgentEvaluationRepository(self._request_session)
+        eval_result = await eval_repo.get_by_run_id(run_uuid)
+        if eval_result:
+            result["evaluation_score"] = eval_result.score
+            result["evaluation_criteria"] = eval_result.criteria
+        else:
+            result["evaluation_score"] = None
+            result["evaluation_criteria"] = None
+
         return result
 
     async def cancel_run(self, run_id: str, user_id: uuid.UUID) -> dict[str, Any]:

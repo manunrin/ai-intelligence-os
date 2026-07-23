@@ -51,6 +51,7 @@ class AgentRun(Base):
         back_populates="runs",
         foreign_keys="AgentRun.scheduled_job_id",
     )
+    evaluations = relationship("AgentEvaluation", back_populates="run")
 
     @property
     def duration(self) -> int | None:

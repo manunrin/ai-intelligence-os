@@ -18,10 +18,12 @@ from backend.database.models import (  # noqa: F401 — import all models for au
     Agent,
     AgentRun,
     AgentStageProgress,
+    AgentEvaluation,
     Workflow,
     UserPreference,
     User,
     AuditLog,
+    ScheduledJob,
 )
 
 config = context.config

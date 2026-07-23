@@ -181,10 +181,18 @@ def get_runtime_service(
     from ..services.agent_runtime_service import AgentRuntimeService
     sf = None
     cp = None
+    eval_svc = None
     if request is not None:
         sf = getattr(request.app.state, 'session_factory', None)
         cp = getattr(request.app.state, 'checkpointer', None)
-    return AgentRuntimeService(db, session_factory=sf, checkpointer=cp)
+        eval_svc = getattr(request.app.state, 'evaluation_service', None)
+    return AgentRuntimeService(db, session_factory=sf, checkpointer=cp, evaluation_service=eval_svc)
+
+
+def get_evaluation_service(request: Request) -> Any:
+    """Dependency: return the EvaluationService singleton from app state."""
+    svc = getattr(request.app.state, 'evaluation_service', None)
+    return svc
 
 
 def get_runtime_service_with_event_pub(
