@@ -541,21 +541,21 @@ All recent activity has been backend-focused: runtime persistence, resume, retry
 ## Known Issues
 
 1. **No refresh token bulk revoke on user events** — `revoke_all_user_tokens()` exists in `RefreshTokenStore` but is not called on password change or account deletion. Orphaned refresh tokens remain in Redis until they naturally expire.
-3. **Pagination UI missing** — Backend supports offset/limit but frontend has no pagination controls.
-4. **Report PUT/DELETE not implemented** — Out of scope for Phase 6-D.1.
-5. **Agent run creates record only** — Workflow execution triggered but not wired to LangGraph runner. *(Phase 10.1: thread_id generation, checkpointer wiring, migration, recovery scan, resume API, and frontend updates all completed. End-to-end live pipeline test still pending.)*
-6. **No per-tab loading states** — Dashboard shows all-or-nothing loading.
-7. **No error boundaries** — Individual sections don't recover independently.
-8. **LiteLLM Gateway not deployed** — Configured in docker-compose.yml but litellm service not included.
-9. **Embedding providers not connected** — Provider classes exist but actual HTTP calls need testing.
-10. **Notification channels implemented** — SMTP (aiosmtplib), Telegram (Bot API), and Slack (incoming webhook) fully implemented in `backend/services/notification/channels/`. Channels enabled/disabled via env vars (`SMTP_*`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_IDS`, `SLACK_WEBHOOK_URL`). Per-channel delivery status recorded in `NotificationOutput.delivery_status`. Graceful degradation — one channel failure doesn't block others. WeChat remains log-only stub. Email falls back to `SMTP_FROM` when `SMTP_TO` is empty. Telegram requires explicit `TELEGRAM_CHAT_IDS` (comma-separated).
-11. **Test type errors** — Pre-existing TS errors in test files (missing `@testing-library/jest-dom` types).
-12. **No standalone articles page** — Articles only visible as a tab in the main dashboard; `frontend/app/articles/` directory is empty.
-13. **No standalone tasks page** — Tasks only visible as a tab in the main dashboard; `frontend/app/tasks/` directory is empty.
-14. **NotificationAgent path** — Located at `backend/agents/notification/agent.py` (subdirectory), not `backend/agents/notification_agent.py`.
-15. **Knowledge detail slide-over takes full width on mobile** — No responsive bottom-sheet fallback for narrow viewports.
-16. **RAG API fails without LLM provider key** — `POST /api/v1/knowledge/rag` returns 500 when no OpenAI/Anthropic/Ollama API key is configured. LiteLLM gateway is configured but not deployed in Docker Compose.
-17. **Playwright E2E cannot run in WSL** — Missing system libraries (`libnspr4.so`, etc.) prevent browser launch. Browser binaries are installed but require system dependencies. Verification must use API-level checks (curl) instead.
+2. **Pagination UI missing** — Backend supports offset/limit but frontend has no pagination controls.
+3. **Report PUT/DELETE not implemented** — Out of scope for Phase 6-D.1.
+4. **Agent run creates record only** — Workflow execution triggered but not wired to LangGraph runner. *(Phase 10.1: thread_id generation, checkpointer wiring, migration, recovery scan, resume API, and frontend updates all completed. End-to-end live pipeline test still pending.)*
+5. **No per-tab loading states** — Dashboard shows all-or-nothing loading.
+6. **No error boundaries** — Individual sections don't recover independently.
+7. **LiteLLM Gateway not deployed** — Configured in docker-compose.yml but litellm service not included.
+8. **Embedding providers not connected** — Provider classes exist but actual HTTP calls need testing.
+9. **Notification channels implemented** — SMTP (aiosmtplib), Telegram (Bot API), and Slack (incoming webhook) fully implemented in `backend/services/notification/channels/`. Channels enabled/disabled via env vars (`SMTP_*`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_IDS`, `SLACK_WEBHOOK_URL`). Per-channel delivery status recorded in `NotificationOutput.delivery_status`. Graceful degradation — one channel failure doesn't block others. WeChat remains log-only stub. Email falls back to `SMTP_FROM` when `SMTP_TO` is empty. Telegram requires explicit `TELEGRAM_CHAT_IDS` (comma-separated).
+10. **Test type errors** — Pre-existing TS errors in test files (missing `@testing-library/jest-dom` types).
+11. **No standalone articles page** — Articles only visible as a tab in the main dashboard; `frontend/app/articles/` directory is empty.
+12. **No standalone tasks page** — Tasks only visible as a tab in the main dashboard; `frontend/app/tasks/` directory is empty.
+13. **NotificationAgent path** — Located at `backend/agents/notification/agent.py` (subdirectory), not `backend/agents/notification_agent.py`.
+14. **Knowledge detail slide-over takes full width on mobile** — No responsive bottom-sheet fallback for narrow viewports.
+15. **RAG API fails without LLM provider key** — `POST /api/v1/knowledge/rag` returns 500 when no OpenAI/Anthropic/Ollama API key is configured. LiteLLM gateway is configured but not deployed in Docker Compose.
+16. **Playwright E2E cannot run in WSL** — Missing system libraries (`libnspr4.so`, etc.) prevent browser launch. Browser binaries are installed but require system dependencies. Verification must use API-level checks (curl) instead.
 
 ---
 
