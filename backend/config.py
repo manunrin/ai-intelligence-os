@@ -78,6 +78,9 @@ class Settings(BaseSettings):
 
     slack_webhook_url: str = ""
 
+    # -- Scheduler --
+    scheduler_enabled: bool = True
+
     # -- CORS --
     cors_allowed_origins: str = ""
 

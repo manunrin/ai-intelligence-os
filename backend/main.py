@@ -111,7 +111,8 @@ async def lifespan(app: FastAPI):
 
     logger.info("Backend startup complete — MCP servers: %s", list(_bootstrap.mcp_registry.list_servers().keys()))
 
-    # ── Agent run recovery scan ──────────────────────────────────────
+    # ── Scheduler service ──────────────────────────────────────────────
+    scheduler_service: SchedulerService | None = None
     try:
         from .services.agent_runtime_service import AgentRuntimeService
         runtime_svc = AgentRuntimeService(
@@ -120,14 +121,31 @@ async def lifespan(app: FastAPI):
         )
         result = await runtime_svc._recover_stale_runs(max_hours=24)
         logger.info("Agent run recovery scan complete: %s", result)
+
+        # Wire SchedulerService with runtime service injected
+        from .services.scheduler.service import SchedulerService
+        scheduler_service = SchedulerService(
+            session_factory=session_factory,
+            runtime_service=runtime_svc,
+        )
+        app.state.scheduler_service = scheduler_service
+        await scheduler_service.start()
     except Exception:
-        logger.warning("Recovery scan failed (non-fatal)", exc_info=True)
+        logger.warning("Scheduler initialization failed (non-fatal)", exc_info=True)
 
     yield
 
     # Shutdown
     if _bootstrap:
         await _bootstrap.mcp_registry.shutdown_all()
+
+    # Stop scheduler
+    if scheduler_service is not None:
+        try:
+            await scheduler_service.stop()
+        except Exception:
+            logger.warning("Scheduler shutdown failed", exc_info=True)
+
     await engine.dispose()
     logger.info("Backend shutdown complete")
 

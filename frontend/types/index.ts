@@ -84,3 +84,18 @@ export type IntelligenceReport = {
   created_at: string;
   user_id: string | null;
 };
+
+export type ScheduledJob = {
+  id: string;
+  name: string;
+  cron_expression: string;
+  job_type: string;
+  enabled: boolean;
+  input_payload: Record<string, unknown> | null;
+  last_run_id: string | null;
+  last_run_at: string | null;
+  last_run_status: string | null;
+  last_run_duration_ms: number | null;
+  created_at: string;
+  updated_at: string;
+};

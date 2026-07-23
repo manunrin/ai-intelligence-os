@@ -12,6 +12,7 @@ from .user_preference import UserPreference
 from .user import User
 from .audit_log import AuditLog
 from .agent_stage_progress import AgentStageProgress
+from .scheduled_job import ScheduledJob
 
 __all__ = [
     "Source",
@@ -26,4 +27,5 @@ __all__ = [
     "UserPreference",
     "User",
     "AuditLog",
+    "ScheduledJob",
 ]

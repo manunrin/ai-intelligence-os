@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from ..services.article_service import ArticleService
     from ..services.knowledge_service import KnowledgeItemService
     from ..services.report_service import ReportService
+    from ..services.scheduler.service import SchedulerService
     from ..services.task_service import TaskService
     from ..services.user_service import UserService
 
@@ -252,3 +253,11 @@ def get_knowledge_service(
     """Dependency: create KnowledgeItemService bound to request session with embedding/vector services."""
     from ..services.knowledge_service import KnowledgeItemService
     return KnowledgeItemService(db, embedding_client=embedding_client, vector_service=vector_service)
+
+
+def get_scheduler_service(request: Request) -> "SchedulerService":
+    """Dependency: return the SchedulerService singleton from app.state."""
+    svc = getattr(request.app.state, "scheduler_service", None)
+    if svc is None:
+        raise RuntimeError("SchedulerService not initialized — check main.py startup")
+    return svc
