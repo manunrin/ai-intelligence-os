@@ -9,7 +9,7 @@ import {
   useState,
 } from "react";
 import { getStoredToken, getStoredUser, storeToken, storeUser, clearAuth } from "@/lib/auth-storage";
-import { setAuthToken, unwrapSingle } from "@/lib/api";
+import { setAccessToken, clearAccessToken } from "@/lib/token-manager";
 import { api } from "@/lib/api";
 
 export interface User {
@@ -64,10 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     storeUser(newUser);
     setToken(newToken);
     setUser(newUser);
-    setAuthToken(newToken);
-
-    // Set cookie for middleware enforcement
-    document.cookie = `aio_auth_token=${newToken}; path=/; SameSite=Lax`;
+    setAccessToken(newToken);
   }, []);
 
   const logout = useCallback(() => {

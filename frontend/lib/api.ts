@@ -1,6 +1,7 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 import { hist, inc } from "@/lib/observability";
+import { getAccessToken, setAccessToken, clearAccessToken, isAuthEndpoint, refreshAccessToken } from "@/lib/token-manager";
 
 /** Optional auth token — set by the auth context before making requests. */
 let authToken: string | null = null;
@@ -23,10 +24,11 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+async function request<T>(path: string, options?: RequestInit & { __retried?: boolean }): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (authToken) {
-    headers.Authorization = `Bearer ${authToken}`;
+  const currentToken = authToken ?? getAccessToken();
+  if (currentToken) {
+    headers.Authorization = `Bearer ${currentToken}`;
   }
 
   const start = Date.now();
@@ -42,11 +44,6 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   hist("http_request_duration_seconds", elapsed, { method, status, path });
 
   if (!res.ok) {
-    // Token expired or invalid — notify auth context to clear state
-    if (res.status === 401) {
-      setAuthToken(null);
-    }
-
     let code = "ERROR";
     let message = `API ${res.status}`;
     try {
@@ -63,6 +60,33 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       } catch {
         // message already set above
       }
+    }
+
+    // ── Silent refresh on 401 (only for authenticated, non-auth endpoints) ──
+    if (res.status === 401 && !isAuthEndpoint(path)) {
+      const retried = options?.__retried ?? false;
+
+      if (retried) {
+        // Already retried once after refresh — token is truly invalid, log out.
+        clearAccessToken();
+        throw new ApiError("UNAUTHORIZED", "Session expired. Please log in again.");
+      }
+
+      try {
+        const newToken = await refreshAccessToken();
+        setAccessToken(newToken);
+        // Retry with the fresh token; __retried prevents infinite loops.
+        return request<T>(path, { ...options, __retried: true });
+      } catch {
+        // Refresh failed — clear auth and surface the original error.
+        clearAccessToken();
+        throw new ApiError(code, message);
+      }
+    }
+
+    // Non-401 or auth endpoint — clear stale token and throw.
+    if (res.status === 401) {
+      clearAccessToken();
     }
     throw new ApiError(code, message);
   }

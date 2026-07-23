@@ -8,10 +8,19 @@ vi.mock("next/navigation", () => ({
 }));
 
 // Mock fetch globally — api.ts calls fetch directly
-const _fetch = globalThis.fetch;
+let _origFetch: typeof fetch | undefined;
+
 beforeEach(() => {
-  (globalThis.fetch as ReturnType<typeof vi.fn>) = vi.fn();
+  _origFetch = globalThis.fetch;
+  (globalThis.fetch as any) = vi.fn();
 });
+
 afterEach(() => {
-  (globalThis.fetch as ReturnType<typeof vi.fn>).mockRestore();
+  const fn = globalThis.fetch as any;
+  if (fn && typeof fn.mockRestore === "function") {
+    fn.mockRestore();
+  }
+  if (_origFetch !== undefined) {
+    (globalThis.fetch as any) = _origFetch;
+  }
 });
