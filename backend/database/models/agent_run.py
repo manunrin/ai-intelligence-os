@@ -34,6 +34,11 @@ class AgentRun(Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     retry_count: Mapped[int] = mapped_column(Integer, default=0)
+    scheduled_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("scheduled_jobs.id", ondelete="SET NULL"), nullable=True, index=True,
+    )
+    # Logical FK to scheduled_jobs.id — enables execution history queries
+    # without a separate table. agent_runs remains the single source of truth.
 
     agent = relationship("Agent", back_populates="runs", foreign_keys="AgentRun.agent_id")
     workflow = relationship("Workflow", back_populates="runs", foreign_keys="AgentRun.workflow_id")
@@ -41,6 +46,11 @@ class AgentRun(Base):
     reports = relationship("IntelligenceReport", back_populates="agent_run", foreign_keys="IntelligenceReport.agent_run_id")
     tasks = relationship("Task", foreign_keys="Task.agent_run_id", back_populates="agent_run")
     user = relationship("User", back_populates="agent_runs")
+    scheduled_job = relationship(
+        "ScheduledJob",
+        back_populates="runs",
+        foreign_keys="AgentRun.scheduled_job_id",
+    )
 
     @property
     def duration(self) -> int | None:

@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import uuid as _uuid
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..rate_limiter import limiter
-from ..schemas.error import ErrorResponse
-from ..schemas.response import APIResponse
-from .deps import get_current_user, get_runtime_service, get_scheduler_service
+from ..database.models import AgentRun
+from .deps import get_current_user, get_runtime_service, get_scheduler_service, get_db
+from ..services.agent_runtime_service import _run_to_dict
 from ..services.scheduler.service import SchedulerService
+from ..schemas.response import APIResponse
+from ..schemas.error import ErrorResponse
 
 
 router = APIRouter(
@@ -136,6 +141,33 @@ async def delete_job(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
         raise
     return APIResponse(success=True, data=None, error=None)
+
+
+# ── Execution history ────────────────────────────────────────────────
+
+@router.get(
+    "/{job_id}/history",
+    summary="Get execution history for a scheduled job",
+    description="Return all agent runs triggered by this scheduled job.",
+    operation_id="getSchedulerJobHistory",
+    response_model=APIResponse[list[dict[str, Any]]],
+)
+async def get_job_history(
+    job_id: str,
+    offset: int = Query(default=0, ge=0),
+    limit: int = Query(default=20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = (
+        select(AgentRun)
+        .where(AgentRun.scheduled_job_id == _uuid.UUID(job_id))
+        .order_by(AgentRun.started_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    runs = result.scalars().all()
+    return APIResponse(success=True, data=[_run_to_dict(r) for r in runs], error=None)
 
 
 # ── Trigger scheduled job now ─────────────────────────────────────────

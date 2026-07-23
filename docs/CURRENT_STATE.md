@@ -540,7 +540,7 @@ All recent activity has been backend-focused: runtime persistence, resume, retry
 ## Known Issues
 
 1. **No refresh token bulk revoke on user events** — `revoke_all_user_tokens()` exists in `RefreshTokenStore` but is not called on password change or account deletion. Orphaned refresh tokens remain in Redis until they naturally expire.
-2. **Pagination UI missing** — Backend supports offset/limit but frontend has no pagination controls.
+2. **Pagination UI missing** — Backend supports offset/limit but frontend has no pagination controls (except scheduler history).
 3. **Report PUT/DELETE not implemented** — Out of scope for Phase 6-D.1.
 4. **Agent run creates record only** — Workflow execution triggered but not wired to LangGraph runner. *(Phase 10.1: thread_id generation, checkpointer wiring, migration, recovery scan, resume API, and frontend updates all completed. End-to-end live pipeline test still pending.)*
 5. **No per-tab loading states** — Dashboard shows all-or-nothing loading.
@@ -570,3 +570,6 @@ All recent activity has been backend-focused: runtime persistence, resume, retry
 - **Phase 10.2.2-C: Scheduler API + Persistence** — COMPLETE. PostgreSQL-backed `scheduled_jobs` table with CRUD endpoints at `/api/v1/scheduler/jobs`. APScheduler `AsyncIOScheduler` (in-memory trigger only) restores enabled jobs from DB on startup. All scheduled execution goes through `AgentRuntimeService.submit()` — same checkpointing, retry, cancellation paths as user-submitted runs. Frontend has a standalone `/scheduler` page with list/toggle/edit/trigger/delete UI.
 - **Phase 10.2.2-D: Refresh Tokens** — COMPLETE. Redis-backed opaque refresh tokens with SHA-256 hashing, one-use rotation, HttpOnly cookie delivery. `/auth/refresh` and `/auth/logout` endpoints. 16 unit tests passing.
 - **Phase 10.2.2-E: Frontend Silent Token Refresh** — COMPLETE. Framework-agnostic token manager with single-refresh gate, retry-on-401 interceptor in api.ts, `__retried` loop prevention, auth endpoint skip. 16 new tests. Full suite: 111 tests pass across 17 files.
+- **Phase 10.3: Scheduler Execution History** — COMPLETE. PostgreSQL-backed execution history via `agent_runs` table (no separate history table). Migration 0010 adds `scheduled_job_id UUID` FK to `agent_runs`. `AgentRuntimeService._notify_scheduler_of_completion()` updates `ScheduledJob.last_run_*` denormalized fields on run completion. New API: `GET /api/v1/scheduler/jobs/{id}/history` returns paginated execution timeline. Frontend has expandable `SchedulerExecutionHistory` component per job card. 7 new backend tests + 111 frontend tests pass — zero regressions. Known: `last_run_duration_ms` only set at completion time.
+
+## Completed Milestones

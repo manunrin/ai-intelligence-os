@@ -59,6 +59,7 @@ export type AgentRun = {
   duration_ms: number | null;
   user_id: string | null;
   retry_count?: number;
+  scheduled_job_id?: string | null;
 } & Record<string, unknown>;
 
 export type Task = {
@@ -99,3 +100,14 @@ export type ScheduledJob = {
   created_at: string;
   updated_at: string;
 };
+
+export interface ExecutionHistoryItem {
+  id: string;
+  status: string;
+  stage: string;
+  started_at: string;
+  finished_at: string | null;
+  duration_ms: number | null;
+  error_message: string | null;
+  retry_count?: number;
+}

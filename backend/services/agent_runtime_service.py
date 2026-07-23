@@ -54,6 +54,7 @@ def _run_to_dict(run: Any) -> dict[str, Any]:
         "user_id": str(run.user_id) if run.user_id else None,
         "retry_count": getattr(run, "retry_count", 0),
         "recovered_at": run.recovered_at.isoformat() if getattr(run, "recovered_at", None) else None,
+        "scheduled_job_id": str(run.scheduled_job_id) if getattr(run, "scheduled_job_id", None) else None,
     }
 
 
@@ -119,6 +120,7 @@ class AgentRuntimeService:
         self._cancellation_tokens: dict[uuid.UUID, bool] = {}
         self._run_tasks: dict[uuid.UUID, asyncio.Task | None] = {}
         self._checkpointer: Any = checkpointer
+        self._scheduled_job_id: str | None = None
 
     async def list_agent_runs(self, user_id: uuid.UUID, *, offset: int = 0, limit: int = 20) -> list[dict[str, Any]]:
         """Return paginated agent runs for the given user."""
@@ -143,6 +145,7 @@ class AgentRuntimeService:
         user_id: uuid.UUID,
         *,
         timeout_seconds: int = 300,
+        scheduled_job_id: str | None = None,
     ) -> dict[str, Any]:
         """Submit an agent run for asynchronous execution.
 
@@ -187,6 +190,7 @@ class AgentRuntimeService:
             duration_ms=None,
             user_id=user_id,
             thread_id=f"agent-run-{run_id}",
+            scheduled_job_id=uuid.UUID(scheduled_job_id) if scheduled_job_id else None,
         )
 
         logger.info("Agent run submitted: type=%s run=%s", agent_type, str(run_id))
@@ -197,6 +201,9 @@ class AgentRuntimeService:
 
         # Set agent run context for downstream log correlation
         _agent_ctx.set(str(run_id))
+
+        # Store scheduled_job_id for completion callbacks
+        self._scheduled_job_id = scheduled_job_id
 
         # Publish audit event for the run creation
         try:
@@ -222,6 +229,7 @@ class AgentRuntimeService:
                 timeout_seconds=timeout_seconds,
                 thread_id=f"agent-run-{run_id}",
                 checkpointer=self._checkpointer,
+                scheduled_job_id=self._scheduled_job_id,
             )
         )
         self._run_tasks[run_id] = bg_task
@@ -236,6 +244,7 @@ class AgentRuntimeService:
         timeout_seconds: int,
         thread_id: str | None = None,
         checkpointer: Any = None,
+        scheduled_job_id: str | None = None,
     ) -> None:
         """Execute a run in the background with its own DB session."""
         from ..trace import start_span
@@ -340,6 +349,9 @@ class AgentRuntimeService:
         await stage_repo.session.commit()
         await self._persist_stages(stage_repo, run_id, events)
         logger.info("Run %s completed in %d ms", str(run_id), result.duration_ms or 0)
+        await self._notify_scheduler_of_completion(
+            self._scheduled_job_id, run_id, result.status, result.duration_ms,
+        )
 
     async def _finalize_failed(
         self,
@@ -361,6 +373,9 @@ class AgentRuntimeService:
             retry_count=retry_count,
         )
         logger.warning("Run %s failed: %s (retries: %d)", str(run_id), result.error_message, retry_count)
+        await self._notify_scheduler_of_completion(
+            self._scheduled_job_id, run_id, result.status, result.duration_ms,
+        )
 
     async def _finalize_cancelled(self, repo: AgentRunRepository, run_id: uuid.UUID, result: RunResult) -> None:
         now = _utcnow()
@@ -373,6 +388,40 @@ class AgentRuntimeService:
             duration_ms=result.duration_ms,
         )
         logger.info("Run %s cancelled after %d ms", str(run_id), result.duration_ms or 0)
+        await self._notify_scheduler_of_completion(
+            self._scheduled_job_id, run_id, "cancelled", result.duration_ms,
+        )
+
+    async def _notify_scheduler_of_completion(
+        self,
+        scheduled_job_id: str | None,
+        run_id: uuid.UUID,
+        status: str,
+        duration_ms: int | None,
+    ) -> None:
+        """Update ScheduledJob.last_run_* fields when a scheduled run completes.
+
+        Uses direct DB query to avoid circular import with SchedulerService.
+        """
+        if not scheduled_job_id:
+            return
+        session = self._session_factory()
+        try:
+            from ..database.models import ScheduledJob
+            stmt = select(ScheduledJob).where(ScheduledJob.id == uuid.UUID(scheduled_job_id))
+            result = await session.execute(stmt)
+            job = result.scalar_one_or_none()
+            if job is None:
+                return
+            job.last_run_id = run_id
+            job.last_run_at = _utcnow()
+            job.last_run_status = status
+            job.last_run_duration_ms = duration_ms
+            await session.commit()
+        except Exception:
+            logger.warning("Failed to update last_run for job %s", scheduled_job_id, exc_info=True)
+        finally:
+            await session.close()
 
     async def _persist_stages(self, stage_repo: AgentStageProgressRepository, run_id: uuid.UUID, events: list[Any]) -> None:
         stages_by_name: dict[str, dict[str, Any]] = {}

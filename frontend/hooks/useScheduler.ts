@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, unwrap, unwrapSingle } from "@/lib/api";
-import type { ScheduledJob } from "@/types";
+import type { ScheduledJob, ExecutionHistoryItem } from "@/types";
 
 export const schedulerKeys = {
   all: ["schedulerJobs"] as const,
@@ -99,5 +99,21 @@ export function useTriggerScheduledJob() {
     onSuccess: (_data, jobId) => {
       qc.invalidateQueries({ queryKey: schedulerKeys.detail(jobId) });
     },
+  });
+}
+
+export const schedulerHistoryKeys = {
+  all: [...schedulerKeys.all, "history"] as const,
+  list: (jobId: string) => [...schedulerHistoryKeys.all, jobId] as const,
+};
+
+export function useSchedulerJobHistory(jobId: string | null) {
+  return useQuery({
+    queryKey: schedulerHistoryKeys.list(jobId ?? ""),
+    queryFn: async () =>
+      unwrap<ExecutionHistoryItem>(
+        await api.get<unknown>(`/api/v1/scheduler/jobs/${jobId}/history`),
+      ),
+    enabled: jobId !== null,
   });
 }

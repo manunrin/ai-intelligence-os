@@ -45,3 +45,4 @@ class ScheduledJob(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
+    runs = relationship("AgentRun", back_populates="scheduled_job", foreign_keys="AgentRun.scheduled_job_id")

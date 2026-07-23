@@ -258,9 +258,6 @@ class SchedulerService:
                 run_result = await self._dispatch_job(job)
                 run_uuid = uuid.UUID(run_result["id"])
 
-                # Record submission — no polling for completion.
-                # Actual completion status updates require a future event-driven
-                # mechanism (e.g., audit log subscriber or DB trigger on agent_runs).
                 job.last_run_id = run_uuid
                 job.last_run_at = now
                 job.last_run_status = "submitted"
@@ -284,7 +281,39 @@ class SchedulerService:
             agent_type=job.job_type,
             input_payload=payload,
             user_id=None,  # system-initiated, not user-initiated
+            scheduled_job_id=str(job.id),
         )
+
+    # ── Execution history helpers ───────────────────────────────────────
+
+    async def update_last_run(
+        self,
+        job_id: uuid.UUID,
+        run_id: uuid.UUID,
+        status: str,
+        duration_ms: int | None = None,
+    ) -> None:
+        """Update denormalized last_run_* fields on a ScheduledJob.
+
+        Called by AgentRuntimeService when a scheduled run reaches its final state.
+        The agent_runs table remains the single source of truth; this is a cache.
+        """
+        session = self._session_factory()
+        try:
+            stmt = select(ScheduledJob).where(ScheduledJob.id == job_id)
+            result = await session.execute(stmt)
+            job = result.scalar_one_or_none()
+            if job is None:
+                return
+            job.last_run_id = run_id
+            job.last_run_at = _utcnow()
+            job.last_run_status = status
+            job.last_run_duration_ms = duration_ms
+            await session.commit()
+        except Exception:
+            logger.warning("Failed to update last_run for job %s", job_id, exc_info=True)
+        finally:
+            await session.close()
 
     # ── Validation ──────────────────────────────────────────────────────
 
