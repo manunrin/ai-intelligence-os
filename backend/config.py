@@ -29,6 +29,12 @@ class Settings(BaseSettings):
     jwt_secret_key: str = ""
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
+    jwt_refresh_token_expire_days: int = 7
+
+    # -- Cookie settings (configurable for dev/prod) --
+    cookie_secure: bool = False  # True in production (HTTPS only)
+    cookie_samesite: str = "lax"  # "strict", "lax", or "none"
+    cookie_domain: str = ""  # Set to ".example.com" for subdomain sharing
 
     # -- Cache / Vector / Storage --
     redis_url: str = "redis://localhost:6379/0"

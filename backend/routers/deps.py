@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from unittest.mock import AsyncMock, MagicMock
 
 from ..config import Settings, get_settings
+from ..services.refresh_token_store import RefreshTokenStore
 
 if TYPE_CHECKING:
     from ..repositories.user_repository import UserRepository
@@ -261,3 +262,9 @@ def get_scheduler_service(request: Request) -> "SchedulerService":
     if svc is None:
         raise RuntimeError("SchedulerService not initialized — check main.py startup")
     return svc
+
+
+def get_redis_client(request: Request) -> "RefreshTokenStore | None":
+    """Dependency: return the RefreshTokenStore from app.state, or None if Redis is unavailable."""
+    store = getattr(request.app.state, "refresh_token_store", None)
+    return store

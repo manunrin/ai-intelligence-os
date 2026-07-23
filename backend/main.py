@@ -133,6 +133,16 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.warning("Scheduler initialization failed (non-fatal)", exc_info=True)
 
+    # ── Refresh token store (Redis-backed) ───────────────────────────────
+    try:
+        from .services.refresh_token_store import RefreshTokenStore
+
+        store = RefreshTokenStore.from_url(settings.redis_url, expire_days=settings.jwt_refresh_token_expire_days)
+        app.state.refresh_token_store = store
+        logger.info("Refresh token store initialized")
+    except Exception:
+        logger.warning("Refresh token store initialization failed — token refresh will not be available", exc_info=True)
+
     yield
 
     # Shutdown
@@ -185,7 +195,7 @@ def create_app() -> FastAPI:
             }
         }
         # Public endpoints that should NOT require authentication
-        public_paths = {"/api/v1/auth/register", "/api/v1/auth/login", "/api/health", "/api/live"}
+        public_paths = {"/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/auth/logout", "/api/health", "/api/live"}
         for path, methods in openapi_schema.get("paths", {}).items():
             for method in ("get", "post", "put", "delete", "patch"):
                 if method not in methods:
