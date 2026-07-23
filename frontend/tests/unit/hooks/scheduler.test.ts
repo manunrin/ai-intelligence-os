@@ -28,3 +28,15 @@ describe("isValidCron", () => {
     expect(isValidCron("")).toBe(false);
   });
 });
+
+describe("schedulerHistoryKeys", () => {
+  it("has all and list keys", async () => {
+    const { schedulerHistoryKeys } = await import("@/hooks/useScheduler");
+    expect(schedulerHistoryKeys.all).toEqual(["schedulerJobs", "history"]);
+    expect(schedulerHistoryKeys.list("job-123")).toEqual([
+      "schedulerJobs",
+      "history",
+      "job-123",
+    ]);
+  });
+});
