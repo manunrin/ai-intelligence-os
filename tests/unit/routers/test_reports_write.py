@@ -109,3 +109,72 @@ class TestReportGetById:
         resp = client.get(f"/api/v1/reports/{uuid.uuid4()}")
         assert resp.status_code == 404
         app.dependency_overrides.clear()
+
+
+class TrackingServiceWithUpdateDelete(TrackingService):
+    """Extended mock that supports update_report and delete_report."""
+
+    async def update_report(self, rid, data, user_id=None):
+        return {
+            "id": str(uuid.uuid4()), "topic": f"Updated: {data.title or 'N/A'}",
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+
+    async def delete_report(self, rid, user_id=None):
+        return True
+
+
+class NotFoundUpdateDeleteService(NotFoundService):
+    async def update_report(self, rid, data, user_id=None):
+        return None
+
+    async def delete_report(self, rid, user_id=None):
+        return False
+
+
+class TestReportUpdate:
+    def test_put_update_report(self):
+        client, app = _make_client_with_override(TrackingServiceWithUpdateDelete)
+        rid = uuid.uuid4()
+        resp = client.put(f"/api/v1/reports/{rid}", json={
+            "title": "Updated Title",
+            "body": "Updated body text here with enough length"
+        })
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+        assert "Updated" in resp.json()["data"]["topic"]
+        app.dependency_overrides.clear()
+
+    def test_put_validation_error_title_too_long(self):
+        client, app = _make_client_with_override(TrackingServiceWithUpdateDelete)
+        resp = client.put(f"/api/v1/reports/{uuid.uuid4()}", json={
+            "title": "T" * 501
+        })
+        assert resp.status_code == 422
+        app.dependency_overrides.clear()
+
+    def test_put_validation_error_body_too_long(self):
+        client, app = _make_client_with_override(TrackingServiceWithUpdateDelete)
+        resp = client.put(f"/api/v1/reports/{uuid.uuid4()}", json={
+            "body": "x" * 500001
+        })
+        assert resp.status_code == 422
+        app.dependency_overrides.clear()
+
+
+class TestReportDelete:
+    def test_delete_report_success(self):
+        client, app = _make_client_with_override(TrackingServiceWithUpdateDelete)
+        rid = uuid.uuid4()
+        resp = client.delete(f"/api/v1/reports/{rid}")
+        assert resp.status_code == 200
+        assert resp.json()["success"] is True
+        assert resp.json()["data"] is None
+        app.dependency_overrides.clear()
+
+    def test_delete_report_not_found_returns_404(self):
+        client, app = _make_client_with_override(NotFoundUpdateDeleteService)
+        rid = uuid.uuid4()
+        resp = client.delete(f"/api/v1/reports/{rid}")
+        assert resp.status_code == 404
+        app.dependency_overrides.clear()

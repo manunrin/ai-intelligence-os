@@ -75,6 +75,16 @@ class ReportService:
             await self._publish_audit(AuditAction.UPDATE, report_id, user_id=user_id)
         return self._to_dict(updated)
 
+    async def delete_report(self, report_id: str, user_id: uuid.UUID | None = None) -> bool:
+        """Delete an existing report if owned by user_id. Returns False if not found."""
+        existing = await self._repo.get_by_id(uuid.UUID(report_id))
+        if existing is None or existing.user_id != user_id:
+            return False
+        deleted = await self._repo.delete(uuid.UUID(report_id))
+        if deleted:
+            await self._publish_audit(AuditAction.DELETE, report_id, user_id=user_id)
+        return deleted
+
     @staticmethod
     def _to_dict(report: Any) -> dict[str, Any]:
         """Convert ORM model to serializable dict."""
