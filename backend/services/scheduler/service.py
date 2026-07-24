@@ -74,12 +74,12 @@ class SchedulerService:
 
     # ── CRUD ────────────────────────────────────────────────────────────
 
-    async def list_jobs(self) -> list[dict]:
-        """Return all scheduled jobs from DB, sorted by name."""
+    async def list_jobs(self, user_id: uuid.UUID) -> list[dict]:
+        """Return scheduled jobs owned by the specific user, sorted by name."""
         session = self._session_factory()
         try:
             result = await session.execute(
-                select(ScheduledJob).order_by(ScheduledJob.name.asc())
+                select(ScheduledJob).where(ScheduledJob.created_by == user_id).order_by(ScheduledJob.name.asc())
             )
             jobs = result.scalars().all()
             return [_job_to_dict(j) for j in jobs]
@@ -145,6 +145,7 @@ class SchedulerService:
         job_type: str | None = None,
         enabled: bool | None = None,
         input_payload: dict | None = None,
+        user_id: uuid.UUID | None = None,
     ) -> dict:
         """Update a scheduled job. Re-registers with APScheduler if cron changed."""
         session = self._session_factory()
@@ -154,6 +155,8 @@ class SchedulerService:
             job = result.scalar_one_or_none()
             if job is None:
                 raise ValueError(f"Scheduled job {job_id} not found")
+            if user_id is not None and job.created_by != user_id:
+                raise PermissionError("Cannot update a job that does not belong to this user")
 
             old_cron = job.cron_expression
             old_enabled = job.enabled
@@ -186,7 +189,7 @@ class SchedulerService:
         finally:
             await session.close()
 
-    async def delete_job(self, job_id: str) -> None:
+    async def delete_job(self, job_id: str, user_id: uuid.UUID | None = None) -> None:
         """Remove a scheduled job from DB and APScheduler."""
         session = self._session_factory()
         try:
@@ -195,6 +198,8 @@ class SchedulerService:
             job = result.scalar_one_or_none()
             if job is None:
                 raise ValueError(f"Scheduled job {job_id} not found")
+            if user_id is not None and job.created_by != user_id:
+                raise PermissionError("Cannot delete a job that does not belong to this user")
 
             self._unregister_from_scheduler(job.id)
             await session.delete(job)
@@ -207,7 +212,7 @@ class SchedulerService:
         """Toggle the enabled state of a scheduled job."""
         return await self.update_job(job_id, enabled=enabled)
 
-    async def trigger_job_now(self, job_id: str) -> dict:
+    async def trigger_job_now(self, job_id: str, user_id: uuid.UUID) -> dict:
         """Manually trigger a scheduled job immediately."""
         session = self._session_factory()
         try:
@@ -216,6 +221,8 @@ class SchedulerService:
             job = result.scalar_one_or_none()
             if job is None:
                 raise ValueError(f"Scheduled job {job_id} not found")
+            if job.created_by != user_id:
+                raise PermissionError("Cannot trigger a job that does not belong to this user")
 
             run_result = await self._dispatch_job(job)
             return _job_to_dict(job)

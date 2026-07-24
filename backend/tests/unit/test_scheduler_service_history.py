@@ -227,6 +227,7 @@ class TestTriggerJobCreatesHistoryLink:
         runtime.submit = AsyncMock(return_value={"id": str(uuid.uuid4()), "status": "running"})
 
         job_id = uuid.uuid4()
+        test_user = uuid.uuid4()
         mock_job = MagicMock()
         mock_job.id = job_id
         mock_job.name = "test_job"
@@ -237,6 +238,7 @@ class TestTriggerJobCreatesHistoryLink:
         mock_job.last_run_at = None
         mock_job.last_run_status = None
         mock_job.last_run_duration_ms = None
+        mock_job.created_by = test_user
         mock_job.created_at = _utcnow()
         mock_job.updated_at = _utcnow()
 
@@ -249,7 +251,7 @@ class TestTriggerJobCreatesHistoryLink:
             runtime_service=runtime,
         )
 
-        await svc.trigger_job_now(str(job_id))
+        await svc.trigger_job_now(str(job_id), user_id=test_user)
 
         call_kwargs = runtime.submit.call_args.kwargs
         assert call_kwargs["scheduled_job_id"] == str(job_id)

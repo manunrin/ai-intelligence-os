@@ -46,7 +46,7 @@ async def list_jobs(
     current_user: Any = Depends(get_current_user),
     scheduler: SchedulerService = Depends(get_scheduler_service),
 ):
-    jobs = await scheduler.list_jobs()
+    jobs = await scheduler.list_jobs(user_id=current_user.id)
     return APIResponse(success=True, data=jobs, error=None)
 
 
@@ -107,6 +107,7 @@ async def update_job(
             job_type=body.get("job_type"),
             enabled=body.get("enabled"),
             input_payload=body.get("input_payload"),
+            user_id=current_user.id,
         )
     except ValueError as exc:
         detail = str(exc)
@@ -135,7 +136,7 @@ async def delete_job(
     scheduler: SchedulerService = Depends(get_scheduler_service),
 ):
     try:
-        await scheduler.delete_job(job_id)
+        await scheduler.delete_job(job_id, user_id=current_user.id)
     except ValueError as exc:
         if "not found" in str(exc):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
@@ -156,11 +157,15 @@ async def get_job_history(
     job_id: str,
     offset: int = Query(default=0, ge=0),
     limit: int = Query(default=20, ge=1, le=100),
+    current_user: Any = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = (
         select(AgentRun)
-        .where(AgentRun.scheduled_job_id == _uuid.UUID(job_id))
+        .where(
+            AgentRun.scheduled_job_id == _uuid.UUID(job_id),
+            AgentRun.user_id == current_user.id,
+        )
         .order_by(AgentRun.started_at.desc())
         .offset(offset)
         .limit(limit)
@@ -187,7 +192,7 @@ async def trigger_job(
     scheduler: SchedulerService = Depends(get_scheduler_service),
 ):
     try:
-        job = await scheduler.trigger_job_now(job_id)
+        job = await scheduler.trigger_job_now(job_id, user_id=current_user.id)
     except ValueError as exc:
         if "not found" in str(exc):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))

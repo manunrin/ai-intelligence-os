@@ -43,6 +43,16 @@ def register_exception_handlers(app: FastAPI) -> None:
             content=error.model_dump(),
         )
 
+    @app.exception_handler(PermissionError)
+    async def permission_error_handler(request: Request, exc: PermissionError) -> JSONResponse:
+        error = ErrorResponse.from_http_exception(
+            HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+        )
+        return JSONResponse(
+            status_code=status.HTTP_403_FORBIDDEN,
+            content=error.model_dump(),
+        )
+
     @app.exception_handler(Exception)
     async def generic_handler(request: Request, exc: Exception) -> JSONResponse:
         request_id = getattr(request.state, "request_id", "unknown")

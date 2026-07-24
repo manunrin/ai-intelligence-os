@@ -163,13 +163,15 @@ class TestAgentRuntimeServiceCancel:
     @pytest.mark.asyncio
     async def test_cancel_running_run(self, service, mock_repo, mock_session):
         run_id = uuid.uuid4()
+        caller_id = uuid.uuid4()
         run_obj = MagicMock()
         run_obj.status = "running"
+        run_obj.user_id = caller_id
         mock_repo.get_by_id.return_value = run_obj
         mock_repo.update = AsyncMock()
         service._run_tasks[run_id] = None
 
-        result = await service.cancel_run(str(run_id), user_id=uuid.uuid4())
+        result = await service.cancel_run(str(run_id), user_id=caller_id)
         assert result["cancelled"] is True
         assert mock_repo.update.call_count >= 1
         # Verify commit was called on the request session

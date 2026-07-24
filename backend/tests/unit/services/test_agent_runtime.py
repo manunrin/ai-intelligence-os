@@ -40,6 +40,7 @@ def _make_mock_agent_run(
     thread_id: str | None = "test-thread-1",
     started_at: datetime | None = None,
     recovered_at: datetime | None = None,
+    user_id=None,
 ) -> MagicMock:
     """Build a MagicMock that mimics an AgentRun ORM object."""
     run = MagicMock()
@@ -48,6 +49,7 @@ def _make_mock_agent_run(
     run.thread_id = thread_id
     run.started_at = started_at or _utcnow() - timedelta(hours=48)
     run.recovered_at = recovered_at
+    run.user_id = user_id
     return run
 
 
@@ -342,27 +344,30 @@ class TestResumeAgentRun:
     async def test_resume_non_interrupted_raises_value_error(self):
         session = _make_mock_session()
         run_id = uuid.uuid4()
-        run = _make_mock_agent_run(run_id=str(run_id), status="completed")
+        test_user = uuid.uuid4()
+        run = _make_mock_agent_run(run_id=str(run_id), status="completed", user_id=test_user)
         session.get = AsyncMock(return_value=run)
         svc = _build_service(session)
 
         with pytest.raises(ValueError, match="Cannot resume run with status 'completed'"):
-            await svc.resume(str(run_id), user_id=uuid.uuid4())
+            await svc.resume(str(run_id), user_id=test_user)
 
     @pytest.mark.asyncio
     async def test_resume_no_checkpointer_uses_input_payload(self):
         session = _make_mock_session()
         run_id = uuid.uuid4()
+        test_user = uuid.uuid4()
         input_payload = {"topic": "test", "_agent_type": "intelligence"}
         run = _make_mock_agent_run(
             run_id=str(run_id),
             status="interrupted",
+            user_id=test_user,
         )
         run.input_payload = input_payload
         session.get = AsyncMock(return_value=run)
 
         svc = _build_service(session)
-        result = await svc.resume(str(run_id), user_id=uuid.uuid4())
+        result = await svc.resume(str(run_id), user_id=test_user)
 
         assert result["status"] == "running"
         # Background task was created (no checkpointer → uses input_payload as state)
@@ -371,9 +376,11 @@ class TestResumeAgentRun:
     async def test_resume_loads_checkpoint_state(self):
         session = _make_mock_session()
         run_id = uuid.uuid4()
+        test_user = uuid.uuid4()
         run = _make_mock_agent_run(
             run_id=str(run_id),
             status="interrupted",
+            user_id=test_user,
         )
         run.input_payload = {"topic": "original", "_agent_type": "autonomous"}
         session.get = AsyncMock(return_value=run)
@@ -404,7 +411,7 @@ class TestResumeAgentRun:
         svc = _build_service(session)
         svc._checkpointer = mock_checkpointer
 
-        result = await svc.resume(str(run_id), user_id=uuid.uuid4())
+        result = await svc.resume(str(run_id), user_id=test_user)
 
         assert result["status"] == "running"
         assert mock_checkpointer.aget.call_count == 1
@@ -413,15 +420,17 @@ class TestResumeAgentRun:
     async def test_resume_updates_run_status_and_stage(self):
         session = _make_mock_session()
         run_id = uuid.uuid4()
+        test_user = uuid.uuid4()
         run = _make_mock_agent_run(
             run_id=str(run_id),
             status="interrupted",
+            user_id=test_user,
         )
         run.input_payload = {"_agent_type": "intelligence"}
         session.get = AsyncMock(return_value=run)
 
         svc = _build_service(session)
-        await svc.resume(str(run_id), user_id=uuid.uuid4())
+        await svc.resume(str(run_id), user_id=test_user)
 
         # Verify update was called with running status and resuming stage
         assert session.commit.call_count >= 1

@@ -585,11 +585,13 @@ class AgentRuntimeService:
                 )
         await stage_repo.session.commit()
 
-    async def get_run(self, run_id: str) -> dict[str, Any] | None:
+    async def get_run(self, run_id: str, user_id: uuid.UUID | None = None) -> dict[str, Any] | None:
         run_uuid = uuid.UUID(run_id)
         repo, stage_repo = _make_repo(self._request_session)
         run = await repo.get_by_id(run_uuid)
         if run is None:
+            return None
+        if user_id is not None and run.user_id is not None and run.user_id != user_id:
             return None
 
         stages = await stage_repo.get_by_run_id(run_uuid)
@@ -632,6 +634,8 @@ class AgentRuntimeService:
         run = await repo.get_by_id(run_uuid)
         if run is None:
             raise AgentRunNotFoundError(run_id)
+        if user_id != run.user_id:
+            raise PermissionError("Cannot cancel a run that does not belong to this user")
         if run.status not in ("running", "cancelling"):
             raise ValueError(f"Cannot cancel run with status '{run.status}'")
 
@@ -714,6 +718,8 @@ class AgentRuntimeService:
         run = await repo.get_by_id(run_uuid)
         if run is None:
             raise AgentRunNotFoundError(run_id)
+        if user_id != run.user_id:
+            raise PermissionError("Cannot resume a run that does not belong to this user")
         if run.status != "interrupted":
             raise ValueError(
                 f"Cannot resume run with status '{run.status}'. "

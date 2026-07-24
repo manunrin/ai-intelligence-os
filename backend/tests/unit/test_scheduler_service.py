@@ -283,7 +283,7 @@ class TestTriggerJobNow:
         mock_job.last_run_at = None
         mock_job.last_run_status = None
         mock_job.last_run_duration_ms = None
-        mock_job.created_at = _utcnow()
+        mock_job.created_by = uuid.uuid4()  # arbitrary owner, test passes matching user_id
         mock_job.updated_at = _utcnow()
 
         mock_result = MagicMock()
@@ -295,7 +295,8 @@ class TestTriggerJobNow:
             runtime_service=runtime,
         )
 
-        await svc.trigger_job_now(str(job_id))
+        test_user = mock_job.created_by
+        await svc.trigger_job_now(str(job_id), user_id=test_user)
 
         runtime.submit.assert_called_once()
         call_kwargs = runtime.submit.call_args.kwargs

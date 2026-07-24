@@ -103,7 +103,7 @@ async def get_agent_run(
     current_user: Any = Depends(get_current_user),
     service: AgentRuntimeService = Depends(get_runtime_service_with_event_pub),
 ):
-    result = await service.get_run(run_id)
+    result = await service.get_run(run_id, user_id=current_user.id)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent run not found")
     return APIResponse(success=True, data=result, error=None)
