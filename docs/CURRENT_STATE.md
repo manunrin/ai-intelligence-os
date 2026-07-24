@@ -1,8 +1,9 @@
 # AI Intelligence OS — Current State
 
-**Last Updated:** 2026-07-23
+**Last Updated:** 2026-07-24
 **Version:** 0.1.0 Beta
-**Branch:** master (HEAD: `91b46a8`)
+**Branch:** master (HEAD: `22e64b3`)
+**Phase:** 12 — COMPLETE
 
 ---
 
@@ -25,7 +26,13 @@ Enterprise AI Intelligence Operating System connecting **Information → Knowled
 
 ---
 
-## Current Phase: 9 — Knowledge Layer Enhancement
+## Current Phase: 12 — COMPLETE (Evaluation Cost Control & Reliability)
+
+All phases through 12 are complete. System is in stabilization mode. Next development should focus on:
+- Fixing pre-existing `slowapi` decorator issue blocking 15 integration/router tests
+- End-to-end live pipeline test with real LLM provider key configured
+- Frontend polish: pagination controls, standalone pages for Articles/Tasks
+- Human-in-the-loop evaluation review and prompt optimization feedback loop
 
 Advanced knowledge management capabilities: vector search (Qdrant), RAG pipeline, knowledge graph construction, cross-reference mapping, hybrid search, embedding caching, and re-ranking.
 
@@ -587,4 +594,35 @@ All recent activity has been backend-focused: runtime persistence, resume, retry
   - **Frontend**: Confidence displayed in RunDetailsSheet evaluation section. No new pages.
   - **Tests**: 18 new unit tests (sampling, content hash, cache freshness, confidence parsing, schema, cache upsert). Full suite: 106 backend unit tests pass, 123 frontend tests pass. Zero regressions.
 
-## Known Issues
+---
+
+## Stabilization Checkpoint — 2026-07-24
+
+Post-Phase-12 verification:
+
+| Check | Result |
+|-------|--------|
+| Backend unit tests (`backend/tests/unit`) | **106 passed** — all passing |
+| Frontend tests (`frontend/`) | **19 test files, 123 passed** — all passing |
+| Git working tree | **Clean** — no uncommitted changes |
+| Branch status | Ahead of `origin/master` by 36 commits |
+| Integration tests (`backend/tests/integration`) | **2 errors** — pre-existing `slowapi` decorator issue (no `request` param on `register()` function in `auth.py`). Unrelated to Phase 12. |
+| Root-level router tests (`tests/unit/routers/`) | **13 errors** — same `slowapi` decorator issue. Pre-existing from Phase 6 refactor. |
+
+### Known Issues Summary
+
+#### Test Infrastructure
+- **slowapi rate limiter incompatibility** — `@limiter.limit()` decorator fails on functions without explicit `request` parameter. Affects 2 integration tests + 13 router-level tests. The `register()` endpoint in `backend/routers/auth.py` (and similar) lacks a `request: Request` parameter required by slowapi's decorator. This is a pre-existing bug from Phase 6 refactoring. All other tests pass.
+
+#### Application
+- No refresh token bulk revoke on user events (orphaned tokens in Redis)
+- Pagination UI missing from frontend
+- Report PUT/DELETE not implemented
+- RAG API fails without LLM provider key configured
+- Playwright E2E cannot run in WSL (missing system libraries)
+- Knowledge detail slide-over takes full width on mobile
+- No automatic prompt optimization / human review loop / memory evolution
+
+#### Environment
+- No `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` configured — blocks end-to-end LLM generation
+- LiteLLM Gateway container healthy but requires API keys for underlying providers
