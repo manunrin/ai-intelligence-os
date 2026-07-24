@@ -51,7 +51,7 @@ router = APIRouter(
     status_code=status.HTTP_201_CREATED,
 )
 @limiter.limit(_login_rate_limit())
-async def register(data: UserCreate, service: UserService = Depends(get_user_service)):
+async def register(data: UserCreate, request: Request, service: UserService = Depends(get_user_service)):
     try:
         user = await service.register(data)
     except ValueError as exc:
