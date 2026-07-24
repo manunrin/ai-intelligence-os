@@ -97,7 +97,7 @@ async def login(data: UserLogin, request: Request, service: UserService = Depend
             success=True,
             data={"access_token": access_token, "token_type": "bearer"},
             error=None,
-        ).model_dump_json(),
+        ).model_dump(),
     )
     resp.set_cookie(
         key="aio_refresh_token",
