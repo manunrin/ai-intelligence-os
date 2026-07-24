@@ -48,6 +48,26 @@ def histogram(name: str, value: float, labels: dict[str, str] | None = None, buc
     _histograms[name][key].append((value, buckets))
 
 
+# ── Evaluation score tracking ────────────────────────────────────
+
+_evaluation_scores: list[float] = []
+
+
+def record_evaluation_score(score: float) -> None:
+    """Record an evaluation score for distribution tracking."""
+    _evaluation_scores.append(score)
+
+
+def get_evaluation_scores() -> list[float]:
+    """Return all recorded evaluation scores."""
+    return list(_evaluation_scores)
+
+
+def reset_evaluation_scores() -> None:
+    """Clear recorded evaluation scores (for tests)."""
+    _evaluation_scores.clear()
+
+
 def reset() -> None:
     """Clear all metrics (useful for tests)."""
     _counters.clear()
@@ -105,6 +125,27 @@ def format_prometheus() -> str:
             lines.append(f"{name}{_format_labels(key)}_bucket{{{_format_labels_inner(key)}le=\"+Inf\"}} {total_count}")
             lines.append(f"{name}{_format_labels(key)}_count {total_count}")
             lines.append(f"{name}{_format_labels(key)}_sum {total_sum:.6f}")
+
+    # ── Evaluation score distribution ──────────────────────────────
+    scores = _evaluation_scores
+    if scores:
+        score_buckets = (0.0, 25.0, 50.0, 75.0, 100.0)
+        score_counts: dict[float, int] = {}
+        for b in score_buckets:
+            score_counts[b] = sum(1 for s in scores if s <= b)
+
+        lines.append("# HELP evaluation_scores_total Total number of recorded evaluation scores")
+        lines.append("# TYPE evaluation_scores_total counter")
+        lines.append(f"evaluation_scores_total {{}} {len(scores)}")
+
+        lines.append("# HELP evaluation_score_distribution Evaluation score histogram")
+        lines.append("# TYPE evaluation_score_distribution histogram")
+        for bound in score_buckets:
+            lines.append(f'evaluation_score_distribution_bucket{{le="{bound:.1f}"}} {score_counts[bound]}')
+        lines.append('evaluation_score_distribution_bucket{{le="+Inf"}} {len(scores)}')
+        lines.append(f"evaluation_score_distribution_count {{}} {len(scores)}")
+        lines.append(f"evaluation_score_distribution_sum {{}} {sum(scores):.1f}")
+
     return "\n".join(lines) + "\n"
 
 

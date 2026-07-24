@@ -90,6 +90,9 @@ class Settings(BaseSettings):
     # -- Agent Evaluation --
     evaluation_enabled: bool = True
     evaluation_score_threshold: float = 0.5
+    evaluation_sample_rate: float = 1.0
+    evaluation_cache_ttl: int = 86400
+    evaluation_model: str = ""
 
     # -- CORS --
     cors_allowed_origins: str = ""

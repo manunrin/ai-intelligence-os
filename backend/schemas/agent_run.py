@@ -24,6 +24,7 @@ class AgentRunResponse(BaseModel):
     user_id: str | None = None
     evaluation_score: float | None = None
     evaluation_criteria: dict[str, float] | None = None
+    evaluation_confidence: float | None = None
 
     model_config = {"from_attributes": True}
 

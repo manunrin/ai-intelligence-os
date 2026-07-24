@@ -149,16 +149,19 @@ class AgentRuntimeService:
         # Batch-fetch evaluation scores for these runs
         run_ids = [r.id for r in runs]
         eval_map: dict[uuid.UUID, float | None] = {}
+        conf_map: dict[uuid.UUID, float | None] = {}
         if run_ids:
             eval_repo = AgentEvaluationRepository(self._request_session)
             evaluations = await eval_repo.get_by_run_ids(run_ids)
             for ev in evaluations:
                 eval_map[ev.agent_run_id] = ev.score
+                conf_map[ev.agent_run_id] = ev.evaluator_confidence
 
         output = []
         for r in runs:
             d = _run_to_dict(r)
             d["evaluation_score"] = eval_map.get(r.id)
+            d["evaluation_confidence"] = conf_map.get(r.id)
             output.append(d)
         return output
 
@@ -316,11 +319,10 @@ class AgentRuntimeService:
                     await self._finalize_cancelled(repo, run_id, result)
                 elif result.status == "completed":
                     eval_result = None
-                    eval_repo = AgentEvaluationRepository(session)
                     if (result.output_payload
                             and self._evaluation_service is not None):
                         eval_result = await self._evaluate_output(
-                            pipeline_type, result.output_payload, state,
+                            pipeline_type, result.output_payload, state, session,
                         )
                     if eval_result is not None:
                         await self._persist_evaluation(session, run_id, eval_result, pipeline_type)
@@ -371,10 +373,12 @@ class AgentRuntimeService:
         pipeline_type: str,
         output_payload: dict[str, Any],
         input_payload: dict[str, Any],
+        session: AsyncSession | None = None,
     ) -> Any | None:
         """Run LLM-based quality evaluation on a completed run's output.
 
         Returns EvaluationResponse or None on any failure.
+        Passes session for cache upsert.
         """
         if self._evaluation_service is None:
             logger.debug("EvaluationService not configured — skipping evaluation")
@@ -384,6 +388,7 @@ class AgentRuntimeService:
                 pipeline_type=pipeline_type,
                 output_payload=output_payload,
                 input_payload=input_payload,
+                session=session,
             )
         except Exception:
             logger.warning(
@@ -406,23 +411,36 @@ class AgentRuntimeService:
 
         score = None
         criteria = None
+        confidence = None
         if hasattr(evaluation_result, "score"):
             score = evaluation_result.score
         if hasattr(evaluation_result, "criteria"):
             criteria = evaluation_result.criteria
+        if hasattr(evaluation_result, "evaluator_confidence"):
+            confidence = evaluation_result.evaluator_confidence
 
         instance = AgentEvaluation(
             agent_run_id=run_id,
             pipeline_type=pipeline_type,
             score=float(score) if score is not None else None,
             criteria=criteria or {},
+            evaluator_confidence=float(confidence) if confidence is not None else None,
         )
         session.add(instance)
         await session.flush()
+
+        # Record score for Prometheus distribution tracking
+        if score is not None:
+            try:
+                from ..metrics import record_evaluation_score
+                record_evaluation_score(float(score))
+            except Exception:
+                pass  # metrics failure must never block evaluation
         logger.info(
-            "Evaluation persisted for run %s (score=%s)",
+            "Evaluation persisted for run %s (score=%s, confidence=%s)",
             str(run_id),
             score,
+            getattr(evaluation_result, "evaluator_confidence", None),
         )
 
     async def _finalize_completed(
@@ -600,9 +618,11 @@ class AgentRuntimeService:
         if eval_result:
             result["evaluation_score"] = eval_result.score
             result["evaluation_criteria"] = eval_result.criteria
+            result["evaluation_confidence"] = eval_result.evaluator_confidence
         else:
             result["evaluation_score"] = None
             result["evaluation_criteria"] = None
+            result["evaluation_confidence"] = None
 
         return result
 

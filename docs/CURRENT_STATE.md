@@ -555,7 +555,7 @@ All recent activity has been backend-focused: runtime persistence, resume, retry
 14. **Knowledge detail slide-over takes full width on mobile** — No responsive bottom-sheet fallback for narrow viewports.
 15. **RAG API fails without LLM provider key** — `POST /api/v1/knowledge/rag` returns 500 when no OpenAI/Anthropic/Ollama API key is configured. LiteLLM gateway is configured but not deployed in Docker Compose.
 16. **Playwright E2E cannot run in WSL** — Missing system libraries (`libnspr4.so`, etc.) prevent browser launch. Browser binaries are installed but require system dependencies. Verification must use API-level checks (curl) instead.
-17. **LLM evaluator cost** — Each completed agent run triggers an LLM call for quality scoring. High-volume scheduled runs may incur noticeable API costs. Consider caching or sampling for production.
+17. ~~LLM evaluator cost~~ — RESOLVED in Phase 12: content-hash caching avoids redundant LLM calls for identical payloads, cheap model routing via `models.yaml` evaluation rule, configurable sampling rate and cache TTL.
 18. **No automatic prompt optimization** — Evaluation criteria and prompts are static. No feedback loop to iteratively improve them based on scores.
 19. **No human review loop** — Evaluations are purely LLM-generated. No mechanism for human-in-the-loop validation or correction of quality scores.
 20. **No memory evolution** — Evaluation results are stored but not fed back into agent behavior or knowledge base updates.
@@ -578,4 +578,13 @@ All recent activity has been backend-focused: runtime persistence, resume, retry
 
 - **Phase 11: Agent Evaluation / Quality Loop** — COMPLETE. Post-pipeline quality evaluation system. Separate `agent_evaluations` table (migration 0011). Evaluation runs outside LangGraph — triggered in `AgentRuntimeService._execute_run()` after executor completion and before `_finalize_completed()`. Uses existing `LLMClient`/`LLMRouter` for scoring across four criteria: accuracy, relevance, actionability, completeness. `EvaluationService` is application-scoped, injected via `app.state`, and gracefully degrades (never blocks run completion). Frontend displays quality badges on historical runs and evaluation details in the run detail sheet. Feature flag `evaluation_enabled` controls activation. API responses include `evaluation_score` and `evaluation_criteria` fields. Backend: 437 tests pass. Frontend: 123 tests pass. Zero regressions.
 
-## Completed Milestones
+- **Phase 12: Evaluation Cost Control & Reliability** — COMPLETE. Three improvements to the Phase 11 evaluation system:
+  - **Content-hash caching** — New `evaluation_cache` table (migration 0012) stores deduplicated results keyed by SHA-256 of input+output payload. Cache TTL configurable via `evaluation_cache_ttl` (default 24h). Cache hits return stored results without LLM call. Separate table from `agent_evaluations` ensures different lifecycle management.
+  - **Cheaper model routing** — New `evaluation_model` config allows explicit cheap model override. Falls back to `models.yaml` routing rule `"evaluation"` which prioritizes `compatible/qwen2.5` → `openai/gpt-4o-mini` → `openai/gpt-4o`. `evaluation_sample_rate` config (default 1.0 for baseline data collection) enables future cost reduction.
+  - **Evaluator confidence** — Prompts updated to request `evaluator_confidence` (0.0–1.0) from LLM. Scored into `agent_evaluations.evaluator_confidence` column. Frontend displays confidence percentage in RunDetailsSheet. Prometheus histogram tracks score distribution across buckets (0, 25, 50, 75, 100).
+  - **Database changes**: Migration 0012 adds `evaluation_cache` table + `evaluator_confidence FLOAT` column to `agent_evaluations`.
+  - **Config additions**: `evaluation_sample_rate`, `evaluation_cache_ttl`, `evaluation_model` in Settings class.
+  - **Frontend**: Confidence displayed in RunDetailsSheet evaluation section. No new pages.
+  - **Tests**: 18 new unit tests (sampling, content hash, cache freshness, confidence parsing, schema, cache upsert). Full suite: 106 backend unit tests pass, 123 frontend tests pass. Zero regressions.
+
+## Known Issues

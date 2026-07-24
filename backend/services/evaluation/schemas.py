@@ -19,3 +19,12 @@ class EvaluationResponse(BaseModel):
     evaluator_notes: str | None = Field(
         default=None, description="Human-readable evaluation notes"
     )
+    evaluator_confidence: float | None = Field(
+        default=None, description="LLM self-assessed confidence in this evaluation (0.0-1.0)"
+    )
+    model_used: str | None = Field(
+        default=None, description="LLM model used for evaluation"
+    )
+    cached: bool = Field(
+        default=False, description="Whether this result came from cache"
+    )

@@ -22,6 +22,8 @@ Return a JSON object with exactly these keys:
     - "actionability": how clearly the output suggests next steps or actions
     - "completeness": how thoroughly the output covers all requested aspects
 - "evaluator_notes": brief explanation of strengths, weaknesses, and rationale
+- "evaluator_confidence": your confidence in this assessment from 0.0 to 1.0 (float). \
+Use lower values when the output is ambiguous, truncated, or hard to evaluate.
 
 Respond ONLY with valid JSON. No markdown fences, no extra text."""
 
@@ -44,6 +46,9 @@ Return a JSON object with exactly these keys:
     - "relevance": how well the output addresses the autonomous task goal
     - "actionability": how clearly the output suggests next steps or actions
     - "completeness": how thoroughly the output covers all relevant aspects
+- "evaluator_notes": brief explanation of strengths, weaknesses, and rationale
+- "evaluator_confidence": your confidence in this assessment from 0.0 to 1.0 (float). \
+Use lower values when the output is ambiguous, truncated, or hard to evaluate.
 
 Respond ONLY with valid JSON. No markdown fences, no extra text."""
 

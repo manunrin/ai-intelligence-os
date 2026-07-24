@@ -40,3 +40,9 @@ routing:
   embedding:
     - [ollama, bge-m3]
     - [openai, text-embedding-3-small]
+
+  # Evaluation — cost-efficient, speed over quality
+  evaluation:
+    - [compatible, qwen2.5]
+    - [openai, gpt-4o-mini]
+    - [openai, gpt-4o]

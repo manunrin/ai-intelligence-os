@@ -291,7 +291,9 @@ function RunHistoryCard({ run, onViewDetails }: { run: AgentRun; onViewDetails: 
   const isTerminal = run.status === "completed" || run.status === "failed" || run.status === "cancelled";
   const isFailed = run.status === "failed";
   const score = (run as any).evaluation_score as number | null | undefined;
-  const hasQuality = score != null && isTerminal;
+  const criteria = (run as any).evaluation_criteria as Record<string, number> | null | undefined;
+  const confidence = (run as any).evaluation_confidence as number | null | undefined;
+  const hasEvaluation = score != null && isTerminal;
 
   return (
     <div className="group rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-150 ease-out hover:shadow-md dark:border-slate-700 dark:bg-slate-800">
@@ -302,7 +304,7 @@ function RunHistoryCard({ run, onViewDetails }: { run: AgentRun; onViewDetails: 
               {run.agent_id}
             </span>
             <Badge variant={variant}>{run.status}</Badge>
-            {hasQuality && (
+            {hasEvaluation && (
               <Badge variant={getQualityVariant(score)}>
                 {formatScore(score)}
               </Badge>
@@ -386,6 +388,7 @@ function RunDetailsSheet({
 
   const score = (run as any).evaluation_score as number | null | undefined;
   const criteria = (run as any).evaluation_criteria as Record<string, number> | null | undefined;
+  const confidence = (run as any).evaluation_confidence as number | null | undefined;
   const hasEvaluation = score != null && criteria != null;
 
   return (
@@ -448,6 +451,11 @@ function RunDetailsSheet({
                   <Badge variant={getQualityVariant(score)} className="text-sm px-3 py-1">
                     {formatScore(score)}
                   </Badge>
+                  {confidence != null && (
+                    <span className="text-xs text-slate-400 dark:text-slate-500">
+                      置信度: {Math.round(confidence * 100)}%
+                    </span>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   {Object.entries(criteria).map(([key, val]) => (

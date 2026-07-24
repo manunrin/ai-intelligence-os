@@ -116,7 +116,12 @@ async def lifespan(app: FastAPI):
         try:
             from .services.evaluation.service import EvaluationService
             from .services.llm.client import LLMClient
-            evaluation_service = EvaluationService(llm_client=LLMClient(llm_router))
+            evaluation_service = EvaluationService(
+                llm_client=LLMClient(llm_router),
+                sample_rate=settings.evaluation_sample_rate,
+                cache_ttl_seconds=settings.evaluation_cache_ttl,
+                evaluation_model=settings.evaluation_model,
+            )
             app.state.evaluation_service = evaluation_service
             logger.info("EvaluationService initialized")
         except Exception:
