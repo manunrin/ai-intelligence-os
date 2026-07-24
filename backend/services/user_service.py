@@ -20,9 +20,10 @@ logger = logging.getLogger(__name__)
 class UserService:
     """Business logic for user authentication."""
 
-    def __init__(self, session: AsyncSession, event_publisher=None) -> None:
+    def __init__(self, session: AsyncSession, event_publisher=None, token_store=None) -> None:
         self._repo = UserRepository(session)
         self._publisher = event_publisher
+        self._token_store = token_store
 
     async def register(self, data: UserCreate) -> UserResponse:
         """Register a new user. Raises ValueError if username or email exists."""
@@ -86,6 +87,42 @@ class UserService:
             ))
         except Exception:
             logger.error("Failed to publish audit event for %s auth %s", action.value, resource_id, exc_info=True)
+
+    async def change_password(self, user_id: str, current_password: str, new_password: str) -> None:
+        """Change user password and revoke all existing refresh tokens."""
+        user = await self._repo.get_by_id(uuid.UUID(user_id))
+        if user is None or not verify_password(current_password, user.hashed_password):
+            raise ValueError("Current password is incorrect")
+
+        user.hashed_password = hash_password(new_password)
+        await self._repo.session.flush()
+        await self._publish_audit(AuditAction.UPDATE, user_id)
+
+        # Revoke all outstanding refresh tokens — old devices must re-authenticate
+        if self._token_store is not None:
+            try:
+                count = await self._token_store.revoke_all_user_tokens(user_id)
+                logger.info("Revoked %d refresh tokens for user %s on password change", count, user_id)
+            except Exception:
+                logger.warning("Failed to revoke refresh tokens for user %s", user_id, exc_info=True)
+
+    async def deactivate_user(self, user_id: str) -> None:
+        """Deactivate user account and revoke all refresh tokens."""
+        user = await self._repo.get_by_id(uuid.UUID(user_id))
+        if user is None:
+            raise ValueError("User not found")
+
+        user.is_active = False
+        await self._repo.session.flush()
+        await self._publish_audit(AuditAction.DELETE, user_id)
+
+        # Revoke all outstanding refresh tokens
+        if self._token_store is not None:
+            try:
+                count = await self._token_store.revoke_all_user_tokens(user_id)
+                logger.info("Revoked %d refresh tokens for user %s on deactivation", count, user_id)
+            except Exception:
+                logger.warning("Failed to revoke refresh tokens for user %s", user_id, exc_info=True)
 
     @staticmethod
     def _to_response(user: Any) -> UserResponse:

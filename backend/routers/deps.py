@@ -167,10 +167,17 @@ def get_report_service(db=Depends(get_db)) -> "ReportService":
     return ReportService(db)
 
 
-def get_user_service(db=Depends(get_db)) -> "UserService":  # noqa: F821
+def get_user_service(
+    db=Depends(get_db),
+    request: Request = None,
+) -> "UserService":  # noqa: F821
     """Dependency: create UserService bound to request session."""
     from ..services.user_service import UserService
-    return UserService(db)
+
+    store = None
+    if request is not None:
+        store = getattr(request.app.state, "refresh_token_store", None)
+    return UserService(db, token_store=store)
 
 
 def get_runtime_service(

@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 
 from ..schemas.error import ErrorResponse
 from ..schemas.response import APIResponse
-from ..schemas.user import TokenResponse, UserCreate, UserLogin, UserResponse
+from ..schemas.user import PasswordChangeRequest, TokenResponse, UserCreate, UserLogin, UserResponse
 from .deps import get_current_user, get_redis_client, get_user_service
 from ..config import get_settings
 from ..rate_limiter import limiter
@@ -110,6 +110,125 @@ async def login(data: UserLogin, request: Request, service: UserService = Depend
         path="/",
     )
     return resp
+
+
+# ── Password Change ──────────────────────────────────────────────────
+
+
+@router.post(
+    "/change-password",
+    summary="Change password",
+    description="Change the current user's password. Revokes all refresh tokens.",
+    operation_id="changePassword",
+    response_model=APIResponse,
+)
+async def change_password(
+    data: PasswordChangeRequest,
+    request: Request,
+    service: UserService = Depends(get_user_service),
+):
+    from ..utils.jwt import decode_access_token
+    from ..config import get_settings
+
+    settings = get_settings()
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid Authorization header",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    token = auth_header[len("Bearer "):]
+    payload = decode_access_token(token, settings)
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+
+    try:
+        await service.change_password(user_id, data.current_password, data.new_password)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    # Revoke the current refresh token since we're issuing a new one below
+    current_token = request.cookies.get("aio_refresh_token")
+    if current_token:
+        try:
+            store = get_redis_client(request)
+            if store is not None:
+                await store.revoke(current_token)
+        except Exception:
+            logger.warning("Failed to revoke old refresh token on password change", exc_info=True)
+
+    return APIResponse(success=True, data=None, error=None)
+
+
+# ── Account Deactivation ─────────────────────────────────────────────
+
+
+@router.post(
+    "/deactivate",
+    summary="Deactivate account",
+    description="Deactivate the current user account. Revokes all refresh tokens.",
+    operation_id="deactivateAccount",
+    response_model=APIResponse,
+)
+async def deactivate_account(
+    request: Request,
+    service: UserService = Depends(get_user_service),
+):
+    from ..utils.jwt import decode_access_token
+    from ..config import get_settings
+
+    settings = get_settings()
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or invalid Authorization header",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    token = auth_header[len("Bearer "):]
+    payload = decode_access_token(token, settings)
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+
+    try:
+        await service.deactivate_user(user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    # Revoke the current refresh token
+    current_token = request.cookies.get("aio_refresh_token")
+    if current_token:
+        try:
+            store = get_redis_client(request)
+            if store is not None:
+                await store.revoke(current_token)
+        except Exception:
+            logger.warning("Failed to revoke old refresh token on deactivation", exc_info=True)
+
+    return APIResponse(success=True, data=None, error=None)
 
 
 # ── Me ────────────────────────────────────────────────────────────────
